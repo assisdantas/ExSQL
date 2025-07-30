@@ -6,7 +6,7 @@ interface
 
 uses
   Classes, SysUtils, SQLDBLib, SQLDB, DB, oracleconnection, Forms, Controls, Graphics, Dialogs, StdCtrls, DBGrids,
-  ComCtrls, ExtCtrls, PairSplitter, Buttons, ZConnection, lazutf8, SynEdit, SynHighlighterSQL, StrUtils, RegExpr,
+  ComCtrls, ExtCtrls, PairSplitter, Buttons, lazutf8, SynEdit, SynHighlighterSQL, StrUtils, RegExpr,
   Windows, SynEditTypes, SynEditKeyCmds, SynCompletion, LCLType, Types;
 
 type
@@ -48,6 +48,7 @@ type
     ToolButton4: TToolButton;
     ToolButton5: TToolButton;
     procedure Button1Click(Sender: TObject);
+    procedure DBGrid1TitleClick(Column: TColumn);
     procedure FormCreate(Sender: TObject);
     procedure FormResize(Sender: TObject);
     procedure FormShow(Sender: TObject);
@@ -66,12 +67,15 @@ type
     procedure ToolButton5Click(Sender: TObject);
   private
     LastWord, OrderColumn, DirectionColumn: string;
+    DoOpen: Boolean;
     procedure ExecuteSQL;
     procedure SelectSQLBlock;
     function GetDateTime: String;
     function IsSelectSQL(const SQLText: string): Boolean;
     function GetSQLBlockAtCursor(SynEdit: TSynEdit): string;
     function GetCurrentWordAtCursor: string;
+    function OpenExec(Query: TSQLQuery; Connection: TOracleConnection; aSQL: String): String;
+    procedure AtualizarTitulo(aGrid: TDBGrid; aCampo, aDirecao: String);
   public
 
   end;
@@ -260,7 +264,6 @@ var
   Reg: TRegExpr;
   StartTime, EndTime, DiffTime: TDateTime;
   FormatedTime, aSQL, MsgReturn: String;
-  Info: TSQLStatementInfo;
 begin
   Panel3.Visible := False;
   Memo1.Clear;
@@ -274,8 +277,6 @@ begin
 
   if aSQL.EndsWith(';') then
     Delete(aSQL, Length(aSQL), 1);
-
-  Info := OracleConnection1.GetStatementInfo(aSQL);
 
   with SQLQuery1 do
   begin
@@ -295,18 +296,7 @@ begin
 
       SQL.Text := aSQL;
 
-      case Info.StatementType of
-        stSelect, stSelectForUpd:
-        begin
-          Open;  // SELECT precisa abrir o dataset
-          MsgReturn := 'Linhas afetadas: '; // INSERT, UPDATE, DELETE, etc
-        end
-        else
-        begin
-          ExecSQL; // INSERT, UPDATE, DELETE, etc
-          MsgReturn := 'Linhas afetadas: ';
-        end;
-      end;
+      MsgReturn := OpenExec(SQLQuery1, OracleConnection1, aSQL);
 
       QueryPerformanceCounter(EndCount);
 
@@ -452,6 +442,44 @@ begin
   end;
 end;
 
+function TForm1.OpenExec(Query: TSQLQuery; Connection: TOracleConnection; aSQL: String): String;
+var
+  Info: TSQLStatementInfo;
+begin
+  Info := Connection.GetStatementInfo(aSQL);
+
+  case Info.StatementType of
+    stSelect, stSelectForUpd:
+    begin
+      Query.Open;  // SELECT precisa abrir o dataset
+      Result := 'Linhas afetadas: '; // INSERT, UPDATE, DELETE, etc
+      DoOpen := True;
+    end
+    else
+    begin
+      Query.ExecSQL; // INSERT, UPDATE, DELETE, etc
+      Result := 'Linhas afetadas: ';
+      DoOpen := False;
+    end;
+  end;
+end;
+
+procedure TForm1.AtualizarTitulo(aGrid: TDBGrid; aCampo, aDirecao: String);
+var
+  i: integer;
+  Titulo: string;
+begin
+  for i:= 0 to aGrid.Columns.Count - 1 do
+  begin
+    Titulo := StringReplace(aGrid.Columns[i].Title.Caption, '↑', '', [rfReplaceAll, rfIgnoreCase]);
+    Titulo := StringReplace(Titulo, '↓', '', [rfReplaceAll, rfIgnoreCase]);
+    if aGrid.Columns[i].FieldName = aCampo then
+      aGrid.Columns[i].Title.Caption := Titulo + '' + StrUtils.IfThen(aDirecao = 'ASC', '↑', '↓')
+    else
+      aGrid.Columns[i].Title.Caption := Titulo;
+  end;
+end;
+
 procedure TForm1.Button1Click(Sender: TObject);
 var
   i: Integer;
@@ -513,6 +541,27 @@ begin
         StatusBar1.Panels[1].Text := 'Desconectado';
       end;
     end;
+  end;
+end;
+
+procedure TForm1.DBGrid1TitleClick(Column: TColumn);
+begin
+  if (SQLQuery1.Active) and (not SQLQuery1.IsEmpty) and (DoOpen) then
+  begin
+    if OrderColumn = Column.FieldName then
+      DirectionColumn := StrUtils.IfThen(DirectionColumn = 'ASC', 'DESC', 'ASC')
+    else
+    begin
+      OrderColumn := Column.FieldName;
+      DirectionColumn := 'ASC';
+    end;
+
+    SQLQuery1.Close;
+
+    SQLQuery1.SQL.Add('ORDER BY '+OrderColumn+' '+DirectionColumn);
+
+    SQLQuery1.Open;
+    AtualizarTitulo(DBGrid1, OrderColumn, DirectionColumn);
   end;
 end;
 
