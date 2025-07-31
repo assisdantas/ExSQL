@@ -1,0 +1,177 @@
+object Form2: TForm2
+  Left = 395
+  Height = 325
+  Top = 325
+  Width = 312
+  BorderIcons = [biSystemMenu]
+  BorderStyle = bsNone
+  Caption = 'Criar conexão'
+  ClientHeight = 325
+  ClientWidth = 312
+  Position = poMainFormCenter
+  LCLVersion = '4.0.0.4'
+  object Button1: TButton
+    Left = 231
+    Height = 25
+    Top = 296
+    Width = 75
+    Caption = 'Salvar'
+    TabOrder = 0
+  end
+  object Button2: TButton
+    Left = 152
+    Height = 25
+    Top = 296
+    Width = 75
+    Caption = 'Cancelar'
+    TabOrder = 1
+    OnClick = Button2Click
+  end
+  object GroupBox1: TGroupBox
+    Left = 6
+    Height = 80
+    Top = 6
+    Width = 300
+    Align = alTop
+    BorderSpacing.Around = 6
+    Caption = 'Tipo de banco de dados'
+    ClientHeight = 60
+    ClientWidth = 296
+    TabOrder = 2
+    object ComboBox1: TComboBox
+      Left = 8
+      Height = 23
+      Top = 0
+      Width = 256
+      ItemHeight = 15
+      Style = csDropDownList
+      TabOrder = 0
+    end
+    object edtLibrary: TLabeledEdit
+      Left = 64
+      Height = 23
+      Top = 30
+      Width = 200
+      EditLabel.Height = 23
+      EditLabel.Width = 52
+      EditLabel.Caption = 'Biblioteca'
+      LabelPosition = lpLeft
+      TabOrder = 1
+    end
+    object SpeedButton1: TSpeedButton
+      Left = 267
+      Height = 23
+      Top = 30
+      Width = 24
+      Images = Form1.ImageList1
+      ImageIndex = 5
+      OnClick = SpeedButton1Click
+    end
+  end
+  object GroupBox2: TGroupBox
+    Left = 6
+    Height = 114
+    Top = 92
+    Width = 300
+    Align = alTop
+    BorderSpacing.Around = 6
+    Caption = 'Registro'
+    ClientHeight = 94
+    ClientWidth = 296
+    TabOrder = 3
+    object LabeledEdit1: TLabeledEdit
+      Left = 40
+      Height = 23
+      Top = 0
+      Width = 224
+      EditLabel.Height = 23
+      EditLabel.Width = 33
+      EditLabel.Caption = 'Nome'
+      LabelPosition = lpLeft
+      TabOrder = 0
+    end
+    object LabeledEdit2: TLabeledEdit
+      Left = 40
+      Height = 23
+      Top = 32
+      Width = 104
+      EditLabel.Height = 23
+      EditLabel.Width = 25
+      EditLabel.Caption = 'Host'
+      LabelPosition = lpLeft
+      TabOrder = 1
+      TextHint = '127.0.0.1'
+    end
+    object LabeledEdit3: TLabeledEdit
+      Left = 184
+      Height = 23
+      Top = 32
+      Width = 80
+      EditLabel.Height = 23
+      EditLabel.Width = 28
+      EditLabel.Caption = 'Porta'
+      LabelPosition = lpLeft
+      TabOrder = 2
+    end
+    object edtDatabase: TLabeledEdit
+      Left = 40
+      Height = 23
+      Top = 64
+      Width = 224
+      EditLabel.Height = 23
+      EditLabel.Width = 33
+      EditLabel.Caption = 'Banco'
+      LabelPosition = lpLeft
+      TabOrder = 3
+    end
+    object SpeedButton2: TSpeedButton
+      Left = 267
+      Height = 23
+      Top = 64
+      Width = 24
+      Images = Form1.ImageList1
+      ImageIndex = 5
+      OnClick = SpeedButton2Click
+    end
+  end
+  object GroupBox3: TGroupBox
+    Left = 6
+    Height = 83
+    Top = 212
+    Width = 300
+    Align = alTop
+    BorderSpacing.Around = 6
+    Caption = 'Credênciais'
+    ClientHeight = 63
+    ClientWidth = 296
+    TabOrder = 4
+    object LabeledEdit5: TLabeledEdit
+      Left = 48
+      Height = 23
+      Top = 0
+      Width = 216
+      EditLabel.Height = 23
+      EditLabel.Width = 40
+      EditLabel.Caption = 'Usuário'
+      LabelPosition = lpLeft
+      TabOrder = 0
+    end
+    object LabeledEdit6: TLabeledEdit
+      Left = 48
+      Height = 23
+      Top = 32
+      Width = 216
+      EchoMode = emPassword
+      EditLabel.Height = 23
+      EditLabel.Width = 32
+      EditLabel.Caption = 'Senha'
+      LabelPosition = lpLeft
+      PasswordChar = '*'
+      TabOrder = 1
+    end
+  end
+  object OpenDialog1: TOpenDialog
+    Left = 112
+    Top = 112
+  end
+end

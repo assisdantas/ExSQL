@@ -5,15 +5,33 @@ unit Unit1;
 interface
 
 uses
-  Classes, SysUtils, SQLDBLib, SQLDB, DB, oracleconnection, Forms, Controls, Graphics, Dialogs, StdCtrls, DBGrids,
-  ComCtrls, ExtCtrls, PairSplitter, Buttons, lazutf8, SynEdit, SynHighlighterSQL, StrUtils, RegExpr,
-  Windows, SynEditTypes, SynEditKeyCmds, SynCompletion, LCLType, Types;
+  Classes, SysUtils, SQLDBLib, SQLDB, SQLite3Conn, DB, oracleconnection, Forms, Controls, Graphics, Dialogs, StdCtrls,
+  DBGrids, ComCtrls, ExtCtrls, PairSplitter, Buttons, lazutf8, SynEdit, SynHighlighterSQL, StrUtils, RegExpr, Windows,
+  SynEditTypes, SynEditKeyCmds, SynCompletion, LCLType, Menus, ActnList, Types;
 
 type
 
   { TForm1 }
 
   TForm1 = class(TForm)
+    actExecuteSQL: TAction;
+    actCommit: TAction;
+    actOpen: TAction;
+    actCopyConn: TAction;
+    actSave: TAction;
+    actSaveAs: TAction;
+    actClose: TAction;
+    actNew: TAction;
+    actPaste: TAction;
+    actCopy: TAction;
+    actCut: TAction;
+    actRedo: TAction;
+    actUndo: TAction;
+    actRollback: TAction;
+    actNewConn: TAction;
+    actEditConn: TAction;
+    actDeleteConn: TAction;
+    ActionList1: TActionList;
     Button1: TBitBtn;
     DataSource1: TDataSource;
     DBGrid1: TDBGrid;
@@ -24,14 +42,51 @@ type
     EditUsuario: TEdit;
     FontDialog1: TFontDialog;
     ImageList1: TImageList;
+    MainMenu1: TMainMenu;
     Memo1: TMemo;
+    MenuItem1: TMenuItem;
+    MenuItem10: TMenuItem;
+    MenuItem11: TMenuItem;
+    MenuItem12: TMenuItem;
+    MenuItem13: TMenuItem;
+    MenuItem14: TMenuItem;
+    MenuItem15: TMenuItem;
+    MenuItem16: TMenuItem;
+    MenuItem17: TMenuItem;
+    MenuItem18: TMenuItem;
+    MenuItem19: TMenuItem;
+    MenuItem20: TMenuItem;
+    MenuItem21: TMenuItem;
+    MenuItem22: TMenuItem;
+    MenuItem23: TMenuItem;
+    MenuItem24: TMenuItem;
+    MenuItem25: TMenuItem;
+    MenuItem26: TMenuItem;
+    MenuItem27: TMenuItem;
+    MenuItem28: TMenuItem;
+    Separator5: TMenuItem;
+    Separator4: TMenuItem;
+    Separator3: TMenuItem;
+    MenuItem2: TMenuItem;
+    MenuItem3: TMenuItem;
+    MenuItem4: TMenuItem;
+    MenuItem5: TMenuItem;
+    MenuItem6: TMenuItem;
+    MenuItem7: TMenuItem;
+    MenuItem8: TMenuItem;
+    MenuItem9: TMenuItem;
+    Separator2: TMenuItem;
+    Separator1: TMenuItem;
     OracleConnection1: TOracleConnection;
     PairSplitter1: TPairSplitter;
+    PairSplitter2: TPairSplitter;
     PairSplitterSide1: TPairSplitterSide;
     PairSplitterSide2: TPairSplitterSide;
     Panel1: TPanel;
     Panel2: TPanel;
     Panel3: TPanel;
+    Panel4: TPanel;
+    PopupMenu1: TPopupMenu;
     SQLDBLibraryLoader1: TSQLDBLibraryLoader;
     SQLQuery1: TSQLQuery;
     SQLTransaction1: TSQLTransaction;
@@ -42,16 +97,25 @@ type
     Timer1: TTimer;
     Timer2: TTimer;
     ToolBar1: TToolBar;
+    ToolBar2: TToolBar;
     ToolButton1: TToolButton;
     ToolButton2: TToolButton;
     ToolButton3: TToolButton;
     ToolButton4: TToolButton;
     ToolButton5: TToolButton;
+    ToolButton6: TToolButton;
+    ToolButton7: TToolButton;
+    ToolButton8: TToolButton;
+    TreeView1: TTreeView;
+    procedure actCommitExecute(Sender: TObject);
+    procedure actExecuteSQLExecute(Sender: TObject);
+    procedure actNewConnExecute(Sender: TObject);
+    procedure actRollbackExecute(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure DBGrid1TitleClick(Column: TColumn);
-    procedure FormCreate(Sender: TObject);
     procedure FormResize(Sender: TObject);
     procedure FormShow(Sender: TObject);
+    procedure MenuItem14Click(Sender: TObject);
     procedure SQLQuery1AfterOpen(DataSet: TDataSet);
     procedure SQLQuery1BeforeOpen(DataSet: TDataSet);
     procedure SynEdit1Click(Sender: TObject);
@@ -61,10 +125,6 @@ type
     procedure SynEdit1StatusChange(Sender: TObject; Changes: TSynStatusChanges);
     procedure Timer1Timer(Sender: TObject);
     procedure Timer2Timer(Sender: TObject);
-    procedure ToolButton1Click(Sender: TObject);
-    procedure ToolButton2Click(Sender: TObject);
-    procedure ToolButton4Click(Sender: TObject);
-    procedure ToolButton5Click(Sender: TObject);
   private
     LastWord, OrderColumn, DirectionColumn: string;
     DoOpen: Boolean;
@@ -88,16 +148,10 @@ implementation
 
 {$R *.lfm}
 
-{ TForm1 }
+uses
+  unit2;
 
-procedure TForm1.FormCreate(Sender: TObject);
-begin
-  UsuarioWT := ParamStrUTF8(1);
-  SenhaDB := ParamStrUTF8(2);
-  AliasDB := ParamStrUTF8(3);
-  UsuarioDB := ParamStrUTF8(4);
-  CodRotina := ParamStrUTF8(5);
-end;
+{ TForm1 }
 
 procedure TForm1.FormResize(Sender: TObject);
 begin
@@ -107,6 +161,12 @@ end;
 procedure TForm1.FormShow(Sender: TObject);
 begin
   FontDialog1.Font := SynEdit1.Font;
+end;
+
+procedure TForm1.MenuItem14Click(Sender: TObject);
+begin
+  if FontDialog1.Execute then
+    SynEdit1.Font := FontDialog1.Font;
 end;
 
 procedure TForm1.SQLQuery1AfterOpen(DataSet: TDataSet);
@@ -202,57 +262,6 @@ begin
 
   // Executa a sugestão com a palavra atual
   SynCompletion1.Execute(CurrentWord, tokenRect);
-end;
-
-procedure TForm1.ToolButton1Click(Sender: TObject);
-begin
-  if FontDialog1.Execute then
-    SynEdit1.Font := FontDialog1.Font;
-end;
-
-procedure TForm1.ToolButton2Click(Sender: TObject);
-begin
-  if not OracleConnection1.Connected then
-  begin
-    MessageDlg('Conexão',
-      'Não conectado ao banco.',
-      mtWarning, [mbOk], 0, mbOk);
-    Exit;
-  end;
-
-
-  if (Trim(SynEdit1.Text) <> '') then
-    ExecuteSQL
-  else
-    MessageDlg('Query',
-      'Nenhuma query informada.',
-      mtInformation, [mbOk], 0, mbOk);
-end;
-
-procedure TForm1.ToolButton4Click(Sender: TObject);
-begin
-  if MessageDlg('Commit',
-    'Deseja aplicar alterações feitas?',
-    mtConfirmation, [mbYes, mbNo], 0, mbNo) = mrYes then
-  begin
-    SQLTransaction1.Commit;
-    Memo1.Lines.Add(GetDateTime+': As alterações foram aplicadas.');
-    ToolButton4.Enabled := False;
-    ToolButton5.Enabled := False;
-  end;
-end;
-
-procedure TForm1.ToolButton5Click(Sender: TObject);
-begin
-  if MessageDlg('Rollback',
-    'Deseja desfazer alterações feitas?',
-    mtConfirmation, [mbYes, mbNo], 0, mbNo) = mrYes then
-  begin
-    SQLTransaction1.Rollback;
-    Memo1.Lines.Add(GetDateTime+': Alterações anteriores descartadas.');
-    ToolButton4.Enabled := False;
-    ToolButton5.Enabled := False;
-  end;
 end;
 
 procedure TForm1.ExecuteSQL;
@@ -541,6 +550,56 @@ begin
         StatusBar1.Panels[1].Text := 'Desconectado';
       end;
     end;
+  end;
+end;
+
+procedure TForm1.actExecuteSQLExecute(Sender: TObject);
+begin
+  if not OracleConnection1.Connected then
+  begin
+    MessageDlg('Conexão',
+      'Não conectado ao banco.',
+      mtWarning, [mbOk], 0, mbOk);
+    Exit;
+  end;
+
+
+  if (Trim(SynEdit1.Text) <> '') then
+    ExecuteSQL
+  else
+    MessageDlg('Query',
+      'Nenhuma query informada.',
+      mtInformation, [mbOk], 0, mbOk);
+end;
+
+procedure TForm1.actNewConnExecute(Sender: TObject);
+begin
+  Form2.Show;
+end;
+
+procedure TForm1.actRollbackExecute(Sender: TObject);
+begin
+  if MessageDlg('Rollback',
+    'Deseja desfazer alterações feitas?',
+    mtConfirmation, [mbYes, mbNo], 0, mbNo) = mrYes then
+  begin
+    SQLTransaction1.Rollback;
+    Memo1.Lines.Add(GetDateTime+': Alterações anteriores descartadas.');
+    actRollback.Enabled := False;
+    actCommit.Enabled := False;
+  end;
+end;
+
+procedure TForm1.actCommitExecute(Sender: TObject);
+begin
+  if MessageDlg('Commit',
+    'Deseja aplicar alterações feitas?',
+    mtConfirmation, [mbYes, mbNo], 0, mbNo) = mrYes then
+  begin
+    SQLTransaction1.Commit;
+    Memo1.Lines.Add(GetDateTime+': As alterações foram aplicadas.');
+    actRollback.Enabled := False;
+    actCommit.Enabled := False;
   end;
 end;
 
