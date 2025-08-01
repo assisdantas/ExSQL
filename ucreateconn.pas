@@ -1,4 +1,4 @@
-unit Unit2;
+unit ucreateconn;
 
 {$mode ObjFPC}{$H+}
 
@@ -9,12 +9,12 @@ uses
 
 type
 
-  { TForm2 }
+  { TfrmCreateConn }
 
-  TForm2 = class(TForm)
+  TfrmCreateConn = class(TForm)
     Button1: TButton;
     Button2: TButton;
-    ComboBox1: TComboBox;
+    cbbType: TComboBox;
     GroupBox1: TGroupBox;
     GroupBox2: TGroupBox;
     GroupBox3: TGroupBox;
@@ -22,6 +22,7 @@ type
     LabeledEdit2: TLabeledEdit;
     LabeledEdit3: TLabeledEdit;
     edtDatabase: TLabeledEdit;
+    LabeledEdit4: TLabeledEdit;
     LabeledEdit5: TLabeledEdit;
     LabeledEdit6: TLabeledEdit;
     edtLibrary: TLabeledEdit;
@@ -29,6 +30,7 @@ type
     SpeedButton1: TSpeedButton;
     SpeedButton2: TSpeedButton;
     procedure Button2Click(Sender: TObject);
+    procedure FormShow(Sender: TObject);
     procedure SpeedButton1Click(Sender: TObject);
     procedure SpeedButton2Click(Sender: TObject);
   private
@@ -38,30 +40,38 @@ type
   end;
 
 var
-  Form2: TForm2;
+  frmCreateConn: TfrmCreateConn;
 
 implementation
 
 {$R *.lfm}
 
-{ TForm2 }
+uses
+  utils;
 
-procedure TForm2.SpeedButton1Click(Sender: TObject);
+{ TfrmCreateConn }
+
+procedure TfrmCreateConn.SpeedButton1Click(Sender: TObject);
 begin
   OpenFile(edtLibrary);
 end;
 
-procedure TForm2.Button2Click(Sender: TObject);
+procedure TfrmCreateConn.Button2Click(Sender: TObject);
 begin
   Close;
 end;
 
-procedure TForm2.SpeedButton2Click(Sender: TObject);
+procedure TfrmCreateConn.FormShow(Sender: TObject);
+begin
+  LoadDatabaseTypes(cbbType);
+end;
+
+procedure TfrmCreateConn.SpeedButton2Click(Sender: TObject);
 begin
   OpenFile(edtDatabase);
 end;
 
-procedure TForm2.OpenFile(EditBox: TLabeledEdit);
+procedure TfrmCreateConn.OpenFile(EditBox: TLabeledEdit);
 begin
   if OpenDialog1.Execute then
     EditBox.Text := OpenDialog1.FileName;

@@ -10,7 +10,7 @@ uses
   athreads,
   {$ENDIF}
   Interfaces, // this includes the LCL widgetset
-  Forms, Unit1, zcomponent, Unit2, Unit3
+  Forms, umain, zcomponent, ucreateconn, utils, usplash
   { you can add units after this };
 
 {$R *.res}
@@ -22,8 +22,9 @@ begin
   Application.MainFormOnTaskbar := True;
   {$POP}
   Application.Initialize;
-  Application.CreateForm(TForm1, Form1);
-  Application.CreateForm(TForm2, Form2);
+  Application.CreateForm(TfrmMain, frmMain);
+  Application.CreateForm(TfrmCreateConn, frmCreateConn);
+  Application.CreateForm(TfrmSplash, frmSplash);
   Application.Run;
 end.
 

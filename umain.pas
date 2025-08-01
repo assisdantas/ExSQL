@@ -1,4 +1,4 @@
-unit Unit1;
+unit umain;
 
 {$mode objfpc}{$H+}
 
@@ -11,9 +11,9 @@ uses
 
 type
 
-  { TForm1 }
+  { TfrmMain }
 
-  TForm1 = class(TForm)
+  TfrmMain = class(TForm)
     actExecuteSQL: TAction;
     actCommit: TAction;
     actOpen: TAction;
@@ -141,7 +141,7 @@ type
   end;
 
 var
-  Form1: TForm1;
+  frmMain: TfrmMain;
   UsuarioWT, SenhaDB, AliasDB, UsuarioDB, CodRotina: String;
 
 implementation
@@ -149,37 +149,38 @@ implementation
 {$R *.lfm}
 
 uses
-  unit2;
+  ucreateconn, utils;
 
-{ TForm1 }
+{ TfrmMain }
 
-procedure TForm1.FormResize(Sender: TObject);
+procedure TfrmMain.FormResize(Sender: TObject);
 begin
   PairSplitterSide1.Height := Panel2.Height div 2;
 end;
 
-procedure TForm1.FormShow(Sender: TObject);
+procedure TfrmMain.FormShow(Sender: TObject);
 begin
+  CreateMainConnection;
   FontDialog1.Font := SynEdit1.Font;
 end;
 
-procedure TForm1.MenuItem14Click(Sender: TObject);
+procedure TfrmMain.MenuItem14Click(Sender: TObject);
 begin
   if FontDialog1.Execute then
     SynEdit1.Font := FontDialog1.Font;
 end;
 
-procedure TForm1.SQLQuery1AfterOpen(DataSet: TDataSet);
+procedure TfrmMain.SQLQuery1AfterOpen(DataSet: TDataSet);
 begin
   Screen.Cursor := crDefault;
 end;
 
-procedure TForm1.SQLQuery1BeforeOpen(DataSet: TDataSet);
+procedure TfrmMain.SQLQuery1BeforeOpen(DataSet: TDataSet);
 begin
   Screen.Cursor := crSQLWait;
 end;
 
-procedure TForm1.SynEdit1Click(Sender: TObject);
+procedure TfrmMain.SynEdit1Click(Sender: TObject);
 begin
   if Trim(SynEdit1.Text) <> '' then
   begin
@@ -188,14 +189,14 @@ begin
   end;
 end;
 
-procedure TForm1.SynEdit1CommandProcessed(Sender: TObject; var Command: TSynEditorCommand; var AChar: TUTF8Char;
+procedure TfrmMain.SynEdit1CommandProcessed(Sender: TObject; var Command: TSynEditorCommand; var AChar: TUTF8Char;
   Data: pointer);
 begin
   {Timer1.Enabled := False;
   Timer1.Enabled := True;}
 end;
 
-procedure TForm1.SynEdit1KeyPress(Sender: TObject; var Key: char);
+procedure TfrmMain.SynEdit1KeyPress(Sender: TObject; var Key: char);
 var
   CurrentWord: string;
 begin
@@ -220,7 +221,7 @@ begin
     Timer2.Enabled := False;
 end;
 
-procedure TForm1.SynEdit1StatusChange(Sender: TObject; Changes: TSynStatusChanges);
+procedure TfrmMain.SynEdit1StatusChange(Sender: TObject; Changes: TSynStatusChanges);
 begin
   {if (scCaretX in Changes) or (scCaretY in Changes) then
   begin
@@ -229,13 +230,13 @@ begin
   end;}
 end;
 
-procedure TForm1.Timer1Timer(Sender: TObject);
+procedure TfrmMain.Timer1Timer(Sender: TObject);
 begin
   Timer1.Enabled := False; // desativa para não repetir
   SelectSQLBlock;
 end;
 
-procedure TForm1.Timer2Timer(Sender: TObject);
+procedure TfrmMain.Timer2Timer(Sender: TObject);
 var
   pt: TPoint;
   tokenRect: TRect;
@@ -264,7 +265,7 @@ begin
   SynCompletion1.Execute(CurrentWord, tokenRect);
 end;
 
-procedure TForm1.ExecuteSQL;
+procedure TfrmMain.ExecuteSQL;
 var
   ErrorLine: Integer;
   StartCount, EndCount, Frequency: Int64;
@@ -372,7 +373,7 @@ begin
   end;
 end;
 
-procedure TForm1.SelectSQLBlock;
+procedure TfrmMain.SelectSQLBlock;
 var
   CurLine: Integer;
   StartLine, EndLine: Integer;
@@ -393,12 +394,12 @@ begin
   SynEdit1.BlockEnd   := Point(Length(SynEdit1.Lines[EndLine - 1]) + 1, EndLine);
 end;
 
-function TForm1.GetDateTime: String;
+function TfrmMain.GetDateTime: String;
 begin
   Result := FormatDateTime('dd-mm-yyyy hh:mm:ss', Now);
 end;
 
-function TForm1.IsSelectSQL(const SQLText: string): Boolean;
+function TfrmMain.IsSelectSQL(const SQLText: string): Boolean;
 var
   Trimmed: string;
 begin
@@ -407,7 +408,7 @@ begin
             AnsiStartsText('WITH', UpperCase(Trimmed));
 end;
 
-function TForm1.GetSQLBlockAtCursor(SynEdit: TSynEdit): string;
+function TfrmMain.GetSQLBlockAtCursor(SynEdit: TSynEdit): string;
 var
   StartLine, EndLine, i: Integer;
 begin
@@ -425,7 +426,7 @@ begin
     Result := Result + SynEdit.Lines[i] + LineEnding;
 end;
 
-function TForm1.GetCurrentWordAtCursor: string;
+function TfrmMain.GetCurrentWordAtCursor: string;
 var
   Line: string;
   Col, StartPos: Integer;
@@ -451,7 +452,7 @@ begin
   end;
 end;
 
-function TForm1.OpenExec(Query: TSQLQuery; Connection: TOracleConnection; aSQL: String): String;
+function TfrmMain.OpenExec(Query: TSQLQuery; Connection: TOracleConnection; aSQL: String): String;
 var
   Info: TSQLStatementInfo;
 begin
@@ -473,7 +474,7 @@ begin
   end;
 end;
 
-procedure TForm1.AtualizarTitulo(aGrid: TDBGrid; aCampo, aDirecao: String);
+procedure TfrmMain.AtualizarTitulo(aGrid: TDBGrid; aCampo, aDirecao: String);
 var
   i: integer;
   Titulo: string;
@@ -489,7 +490,7 @@ begin
   end;
 end;
 
-procedure TForm1.Button1Click(Sender: TObject);
+procedure TfrmMain.Button1Click(Sender: TObject);
 var
   i: Integer;
   TextBox: TControl;
@@ -553,7 +554,7 @@ begin
   end;
 end;
 
-procedure TForm1.actExecuteSQLExecute(Sender: TObject);
+procedure TfrmMain.actExecuteSQLExecute(Sender: TObject);
 begin
   if not OracleConnection1.Connected then
   begin
@@ -572,12 +573,12 @@ begin
       mtInformation, [mbOk], 0, mbOk);
 end;
 
-procedure TForm1.actNewConnExecute(Sender: TObject);
+procedure TfrmMain.actNewConnExecute(Sender: TObject);
 begin
-  Form2.Show;
+  frmCreateConn.Show;
 end;
 
-procedure TForm1.actRollbackExecute(Sender: TObject);
+procedure TfrmMain.actRollbackExecute(Sender: TObject);
 begin
   if MessageDlg('Rollback',
     'Deseja desfazer alterações feitas?',
@@ -590,7 +591,7 @@ begin
   end;
 end;
 
-procedure TForm1.actCommitExecute(Sender: TObject);
+procedure TfrmMain.actCommitExecute(Sender: TObject);
 begin
   if MessageDlg('Commit',
     'Deseja aplicar alterações feitas?',
@@ -603,7 +604,7 @@ begin
   end;
 end;
 
-procedure TForm1.DBGrid1TitleClick(Column: TColumn);
+procedure TfrmMain.DBGrid1TitleClick(Column: TColumn);
 begin
   if (SQLQuery1.Active) and (not SQLQuery1.IsEmpty) and (DoOpen) then
   begin

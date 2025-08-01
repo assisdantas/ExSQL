@@ -1,19 +1,20 @@
-object Form2: TForm2
-  Left = 395
-  Height = 325
-  Top = 325
+object frmCreateConn: TfrmCreateConn
+  Left = 325
+  Height = 362
+  Top = 138
   Width = 312
   BorderIcons = [biSystemMenu]
-  BorderStyle = bsNone
+  BorderStyle = bsSingle
   Caption = 'Criar conexão'
-  ClientHeight = 325
+  ClientHeight = 362
   ClientWidth = 312
   Position = poMainFormCenter
   LCLVersion = '4.0.0.4'
+  OnShow = FormShow
   object Button1: TButton
     Left = 231
     Height = 25
-    Top = 296
+    Top = 328
     Width = 75
     Caption = 'Salvar'
     TabOrder = 0
@@ -21,7 +22,7 @@ object Form2: TForm2
   object Button2: TButton
     Left = 152
     Height = 25
-    Top = 296
+    Top = 328
     Width = 75
     Caption = 'Cancelar'
     TabOrder = 1
@@ -29,16 +30,16 @@ object Form2: TForm2
   end
   object GroupBox1: TGroupBox
     Left = 6
-    Height = 80
+    Height = 106
     Top = 6
     Width = 300
     Align = alTop
     BorderSpacing.Around = 6
     Caption = 'Tipo de banco de dados'
-    ClientHeight = 60
+    ClientHeight = 86
     ClientWidth = 296
     TabOrder = 2
-    object ComboBox1: TComboBox
+    object cbbType: TComboBox
       Left = 8
       Height = 23
       Top = 0
@@ -63,15 +64,26 @@ object Form2: TForm2
       Height = 23
       Top = 30
       Width = 24
-      Images = Form1.ImageList1
+      Images = frmMain.ImageList1
       ImageIndex = 5
       OnClick = SpeedButton1Click
+    end
+    object LabeledEdit4: TLabeledEdit
+      Left = 64
+      Height = 23
+      Top = 57
+      Width = 104
+      EditLabel.Height = 23
+      EditLabel.Width = 40
+      EditLabel.Caption = 'Charset'
+      LabelPosition = lpLeft
+      TabOrder = 2
     end
   end
   object GroupBox2: TGroupBox
     Left = 6
     Height = 114
-    Top = 92
+    Top = 118
     Width = 300
     Align = alTop
     BorderSpacing.Around = 6
@@ -129,7 +141,7 @@ object Form2: TForm2
       Height = 23
       Top = 64
       Width = 24
-      Images = Form1.ImageList1
+      Images = frmMain.ImageList1
       ImageIndex = 5
       OnClick = SpeedButton2Click
     end
@@ -137,7 +149,7 @@ object Form2: TForm2
   object GroupBox3: TGroupBox
     Left = 6
     Height = 83
-    Top = 212
+    Top = 238
     Width = 300
     Align = alTop
     BorderSpacing.Around = 6

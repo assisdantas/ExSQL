@@ -1,7 +1,7 @@
-object Form1: TForm1
-  Left = 527
+object frmMain: TfrmMain
+  Left = 356
   Height = 720
-  Top = 111
+  Top = 101
   Width = 1344
   Caption = 'ExSQL'
   ClientHeight = 720
@@ -792,8 +792,8 @@ object Form1: TForm1
     KeepConnection = False
     Transaction = SQLTransaction1
     CharSet = 'AL32UTF8'
-    Left = 376
-    Top = 357
+    Left = 320
+    Top = 352
   end
   object SQLQuery1: TSQLQuery
     FieldDefs = <>
@@ -803,39 +803,39 @@ object Form1: TForm1
     Transaction = SQLTransaction1
     Params = <>
     Macros = <>
-    Left = 512
-    Top = 341
+    Left = 488
+    Top = 280
   end
   object SQLTransaction1: TSQLTransaction
     Active = False
     Database = OracleConnection1
-    Left = 445
-    Top = 328
+    Left = 408
+    Top = 280
   end
   object DataSource1: TDataSource
     DataSet = SQLQuery1
-    Left = 457
-    Top = 381
+    Left = 408
+    Top = 352
   end
   object SQLDBLibraryLoader1: TSQLDBLibraryLoader
     Enabled = False
     ConnectionType = 'Oracle'
     LibraryName = 'C:\instantclient-basic-nt-11.2.0.4.0\instantclient_11_2\oci.dll'
-    Left = 536
-    Top = 398
+    Left = 504
+    Top = 352
   end
   object FontDialog1: TFontDialog
     MinFontSize = 0
     MaxFontSize = 0
-    Left = 592
-    Top = 376
+    Left = 1120
+    Top = 420
   end
   object ImageList1: TImageList
     DrawingStyle = dsTransparent
     Height = 20
     Width = 20
-    Left = 576
-    Top = 328
+    Left = 568
+    Top = 280
     Bitmap = {
       4C7A1100000014000000140000005B1300000000000078DAED9C0B5813C7DAC7
       D1DA9E5EAC2DA15040AAA75A1550C104117A51B0260ADEB846EB9504954B0228
@@ -1000,20 +1000,20 @@ object Form1: TForm1
     Enabled = False
     SQLDialect = sqlSybase
     Left = 655
-    Top = 329
+    Top = 352
   end
   object Timer1: TTimer
     Enabled = False
     Interval = 3000
     OnTimer = Timer1Timer
-    Left = 723
+    Left = 880
     Top = 313
   end
   object Timer2: TTimer
     Enabled = False
     Interval = 3000
     OnTimer = Timer2Timer
-    Left = 776
+    Left = 933
     Top = 313
   end
   object SynCompletion1: TSynCompletion
@@ -1600,12 +1600,12 @@ object Form1: TForm1
     EndOfTokenChr = '()[].'
     ExecCommandID = ecSynCompletionExecute
     ToggleReplaceWhole = False
-    Left = 657
-    Top = 301
+    Left = 655
+    Top = 280
   end
   object PopupMenu1: TPopupMenu
-    Left = 745
-    Top = 463
+    Left = 880
+    Top = 420
     object MenuItem16: TMenuItem
       Action = actNewConn
     end
@@ -1620,7 +1620,7 @@ object Form1: TForm1
     end
   end
   object MainMenu1: TMainMenu
-    Left = 808
+    Left = 965
     Top = 420
     object MenuItem1: TMenuItem
       Caption = '&Arquivo'
@@ -1713,8 +1713,8 @@ object Form1: TForm1
   end
   object ActionList1: TActionList
     Images = ImageList1
-    Left = 926
-    Top = 399
+    Left = 1045
+    Top = 420
     object actNewConn: TAction
       Caption = '&Nova conexão'
       ImageIndex = 2
