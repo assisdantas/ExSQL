@@ -5,9 +5,11 @@ unit umain;
 interface
 
 uses
-  Classes, SysUtils, SQLDBLib, SQLDB, SQLite3Conn, DB, oracleconnection, Forms, Controls, Graphics, Dialogs, StdCtrls,
-  DBGrids, ComCtrls, ExtCtrls, PairSplitter, Buttons, lazutf8, SynEdit, SynHighlighterSQL, StrUtils, RegExpr, Windows,
-  SynEditTypes, SynEditKeyCmds, SynCompletion, LCLType, Menus, ActnList, Types;
+  Classes, SysUtils, SQLDBLib, SQLDB, IBConnection, SQLite3Conn, DB,
+  oracleconnection, Forms, Controls, Graphics, Dialogs, StdCtrls, DBGrids,
+  ComCtrls, ExtCtrls, PairSplitter, Buttons, lazutf8, SynEdit,
+  SynHighlighterSQL, StrUtils, RegExpr, Windows, SynEditTypes, SynEditKeyCmds,
+  SynCompletion, LCLType, Menus, ActnList, Types;
 
 type
 
@@ -106,13 +108,15 @@ type
     ToolButton6: TToolButton;
     ToolButton7: TToolButton;
     ToolButton8: TToolButton;
-    TreeView1: TTreeView;
+    tvwConnection: TTreeView;
     procedure actCommitExecute(Sender: TObject);
+    procedure actEditConnExecute(Sender: TObject);
     procedure actExecuteSQLExecute(Sender: TObject);
     procedure actNewConnExecute(Sender: TObject);
     procedure actRollbackExecute(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure DBGrid1TitleClick(Column: TColumn);
+    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormResize(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure MenuItem14Click(Sender: TObject);
@@ -125,17 +129,19 @@ type
     procedure SynEdit1StatusChange(Sender: TObject; Changes: TSynStatusChanges);
     procedure Timer1Timer(Sender: TObject);
     procedure Timer2Timer(Sender: TObject);
+    procedure tvwConnectionDblClick(Sender: TObject);
   private
     LastWord, OrderColumn, DirectionColumn: string;
     DoOpen: Boolean;
     procedure ExecuteSQL;
     procedure SelectSQLBlock;
-    function GetDateTime: String;
+    procedure TitleOrderUpdate(aGrid: TDBGrid; aField, aDirection: String);
     function IsSelectSQL(const SQLText: string): Boolean;
     function GetSQLBlockAtCursor(SynEdit: TSynEdit): string;
     function GetCurrentWordAtCursor: string;
     function OpenExec(Query: TSQLQuery; Connection: TOracleConnection; aSQL: String): String;
-    procedure AtualizarTitulo(aGrid: TDBGrid; aCampo, aDirecao: String);
+    function RemoveOrderBy(const aSQL: String): String;
+    function ConType(aCodType: Integer): Integer;
   public
 
   end;
@@ -149,7 +155,7 @@ implementation
 {$R *.lfm}
 
 uses
-  ucreateconn, utils;
+  ucreateconn, uconnfactory, utils;
 
 { TfrmMain }
 
@@ -160,7 +166,6 @@ end;
 
 procedure TfrmMain.FormShow(Sender: TObject);
 begin
-  CreateMainConnection;
   FontDialog1.Font := SynEdit1.Font;
 end;
 
@@ -265,6 +270,28 @@ begin
   SynCompletion1.Execute(CurrentWord, tokenRect);
 end;
 
+procedure TfrmMain.tvwConnectionDblClick(Sender: TObject);
+var
+  ConnectionInfo: TConnectionInfo;
+  ConnectionManager: TConnectionManager;
+  Conn: TCustomConnection;
+begin
+  ConnectionInfo := TConnectionInfo.Create;
+  ConnectionManager := TConnectionManager.Create;
+
+  try
+    if Assigned(tvwConnection.Selected) and Assigned(tvwConnection.Selected.Data) then
+    begin
+      ConnectionInfo := TConnectionInfo(tvwConnection.Selected.Data);
+      Conn := ConnectionManager.GetOrCreateConnection(ConnectionInfo);
+      Conn.Connected := True;
+    end;
+  finally
+    ConnectionManager.Free;
+    ConnectionInfo.Free;
+  end;
+end;
+
 procedure TfrmMain.ExecuteSQL;
 var
   ErrorLine: Integer;
@@ -272,7 +299,6 @@ var
   ElapsedNs: Int64;
   Hours, Minutes, Seconds, Nanoseconds: Int64;
   Reg: TRegExpr;
-  StartTime, EndTime, DiffTime: TDateTime;
   FormatedTime, aSQL, MsgReturn: String;
 begin
   Panel3.Visible := False;
@@ -394,11 +420,6 @@ begin
   SynEdit1.BlockEnd   := Point(Length(SynEdit1.Lines[EndLine - 1]) + 1, EndLine);
 end;
 
-function TfrmMain.GetDateTime: String;
-begin
-  Result := FormatDateTime('dd-mm-yyyy hh:mm:ss', Now);
-end;
-
 function TfrmMain.IsSelectSQL(const SQLText: string): Boolean;
 var
   Trimmed: string;
@@ -474,19 +495,44 @@ begin
   end;
 end;
 
-procedure TfrmMain.AtualizarTitulo(aGrid: TDBGrid; aCampo, aDirecao: String);
+function TfrmMain.RemoveOrderBy(const aSQL: String): String;
+var
+  PosOrder: Integer;
+begin
+  PosOrder := LastDelimiter('ORDER BY', UpperCase(aSQL));
+  if PosOrder > 0 then
+    Result := Trim(Copy(aSQL, 1, PosOrder - 1))
+  else
+    Result := aSQL;
+end;
+
+function TfrmMain.ConType(aCodType: Integer): Integer;
+var
+  i: Integer;
+begin
+  for i := 0 to frmCreateConn.cbbType.Items.Count - 1 do
+  begin
+    if PtrInt(frmCreateConn.cbbType.Items.Objects[i]) = aCodType then
+    begin
+      Result := i;
+      Break;
+    end;
+  end;
+end;
+
+procedure TfrmMain.TitleOrderUpdate(aGrid: TDBGrid; aField, aDirection: String);
 var
   i: integer;
-  Titulo: string;
+  ColumnTitle: string;
 begin
   for i:= 0 to aGrid.Columns.Count - 1 do
   begin
-    Titulo := StringReplace(aGrid.Columns[i].Title.Caption, '↑', '', [rfReplaceAll, rfIgnoreCase]);
-    Titulo := StringReplace(Titulo, '↓', '', [rfReplaceAll, rfIgnoreCase]);
-    if aGrid.Columns[i].FieldName = aCampo then
-      aGrid.Columns[i].Title.Caption := Titulo + '' + StrUtils.IfThen(aDirecao = 'ASC', '↑', '↓')
+    ColumnTitle := StringReplace(aGrid.Columns[i].Title.Caption, '↑', '', [rfReplaceAll, rfIgnoreCase]);
+    ColumnTitle := StringReplace(ColumnTitle, '↓', '', [rfReplaceAll, rfIgnoreCase]);
+    if aGrid.Columns[i].FieldName = aField then
+      aGrid.Columns[i].Title.Caption := ColumnTitle + '' + StrUtils.IfThen(aDirection = 'ASC', '↑', '↓')
     else
-      aGrid.Columns[i].Title.Caption := Titulo;
+      aGrid.Columns[i].Title.Caption := ColumnTitle;
   end;
 end;
 
@@ -575,6 +621,7 @@ end;
 
 procedure TfrmMain.actNewConnExecute(Sender: TObject);
 begin
+  frmCreateConn.Editing := False;
   frmCreateConn.Show;
 end;
 
@@ -604,7 +651,40 @@ begin
   end;
 end;
 
+procedure TfrmMain.actEditConnExecute(Sender: TObject);
+var
+  ConnectionInfo: TConnectionInfo;
+begin
+  ConnectionInfo := TConnectionInfo.Create;
+
+  try
+    if Assigned(tvwConnection.Selected) and Assigned(tvwConnection.Selected.Data) then
+    begin
+      ConnectionInfo := TConnectionInfo(tvwConnection.Selected.Data);
+    end;
+
+    with frmCreateConn do
+    begin
+      Editing := True;
+      cbbType.ItemIndex := ConType(ConnectionInfo.aCodType);
+      edtLibrary.Text := ConnectionInfo.aLibrary;
+      edtCharset.Text := ConnectionInfo.aCharset;
+      edtName.Text := ConnectionInfo.aName;
+      edtHost.Text := ConnectionInfo.aHost;
+      edtPort.Text := IntToStr(ConnectionInfo.aPort);
+      edtDatabase.Text := ConnectionInfo.aDatabase;
+      edtuser.Text := ConnectionInfo.aDatabase;
+      edtPassword.Text := ConnectionInfo.aPassword;
+      Show;
+    end;
+  finally
+    ConnectionInfo.Free;
+  end;
+end;
+
 procedure TfrmMain.DBGrid1TitleClick(Column: TColumn);
+var
+  OriginSQL: String;
 begin
   if (SQLQuery1.Active) and (not SQLQuery1.IsEmpty) and (DoOpen) then
   begin
@@ -618,11 +698,21 @@ begin
 
     SQLQuery1.Close;
 
+    OriginSQL := SQLQuery1.SQL.Text;
+    OriginSQL := RemoveOrderBy(OriginSQL);
+
+    SQLQuery1.SQL.Text := OriginSQL;
+
     SQLQuery1.SQL.Add('ORDER BY '+OrderColumn+' '+DirectionColumn);
 
     SQLQuery1.Open;
-    AtualizarTitulo(DBGrid1, OrderColumn, DirectionColumn);
+    TitleOrderUpdate(DBGrid1, OrderColumn, DirectionColumn);
   end;
+end;
+
+procedure TfrmMain.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+begin
+  ClearConnections;
 end;
 
 end.

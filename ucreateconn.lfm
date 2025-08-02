@@ -1,7 +1,7 @@
 object frmCreateConn: TfrmCreateConn
-  Left = 325
+  Left = 2019
   Height = 362
-  Top = 138
+  Top = 149
   Width = 312
   BorderIcons = [biSystemMenu]
   BorderStyle = bsSingle
@@ -18,6 +18,7 @@ object frmCreateConn: TfrmCreateConn
     Width = 75
     Caption = 'Salvar'
     TabOrder = 0
+    OnClick = Button1Click
   end
   object Button2: TButton
     Left = 152
@@ -28,7 +29,7 @@ object frmCreateConn: TfrmCreateConn
     TabOrder = 1
     OnClick = Button2Click
   end
-  object GroupBox1: TGroupBox
+  object grpbDatabase: TGroupBox
     Left = 6
     Height = 106
     Top = 6
@@ -59,16 +60,16 @@ object frmCreateConn: TfrmCreateConn
       LabelPosition = lpLeft
       TabOrder = 1
     end
-    object SpeedButton1: TSpeedButton
+    object btnOpenLibrary: TSpeedButton
       Left = 267
       Height = 23
       Top = 30
       Width = 24
       Images = frmMain.ImageList1
       ImageIndex = 5
-      OnClick = SpeedButton1Click
+      OnClick = btnOpenLibraryClick
     end
-    object LabeledEdit4: TLabeledEdit
+    object edtCharset: TLabeledEdit
       Left = 64
       Height = 23
       Top = 57
@@ -80,7 +81,7 @@ object frmCreateConn: TfrmCreateConn
       TabOrder = 2
     end
   end
-  object GroupBox2: TGroupBox
+  object grpbRegister: TGroupBox
     Left = 6
     Height = 114
     Top = 118
@@ -91,7 +92,7 @@ object frmCreateConn: TfrmCreateConn
     ClientHeight = 94
     ClientWidth = 296
     TabOrder = 3
-    object LabeledEdit1: TLabeledEdit
+    object edtName: TLabeledEdit
       Left = 40
       Height = 23
       Top = 0
@@ -102,7 +103,7 @@ object frmCreateConn: TfrmCreateConn
       LabelPosition = lpLeft
       TabOrder = 0
     end
-    object LabeledEdit2: TLabeledEdit
+    object edtHost: TLabeledEdit
       Left = 40
       Height = 23
       Top = 32
@@ -112,9 +113,8 @@ object frmCreateConn: TfrmCreateConn
       EditLabel.Caption = 'Host'
       LabelPosition = lpLeft
       TabOrder = 1
-      TextHint = '127.0.0.1'
     end
-    object LabeledEdit3: TLabeledEdit
+    object edtPort: TLabeledEdit
       Left = 184
       Height = 23
       Top = 32
@@ -123,6 +123,7 @@ object frmCreateConn: TfrmCreateConn
       EditLabel.Width = 28
       EditLabel.Caption = 'Porta'
       LabelPosition = lpLeft
+      NumbersOnly = True
       TabOrder = 2
     end
     object edtDatabase: TLabeledEdit
@@ -136,17 +137,17 @@ object frmCreateConn: TfrmCreateConn
       LabelPosition = lpLeft
       TabOrder = 3
     end
-    object SpeedButton2: TSpeedButton
+    object btnOpenDatabase: TSpeedButton
       Left = 267
       Height = 23
       Top = 64
       Width = 24
       Images = frmMain.ImageList1
       ImageIndex = 5
-      OnClick = SpeedButton2Click
+      OnClick = btnOpenDatabaseClick
     end
   end
-  object GroupBox3: TGroupBox
+  object grpbCredentials: TGroupBox
     Left = 6
     Height = 83
     Top = 238
@@ -157,7 +158,7 @@ object frmCreateConn: TfrmCreateConn
     ClientHeight = 63
     ClientWidth = 296
     TabOrder = 4
-    object LabeledEdit5: TLabeledEdit
+    object edtUser: TLabeledEdit
       Left = 48
       Height = 23
       Top = 0
@@ -168,7 +169,7 @@ object frmCreateConn: TfrmCreateConn
       LabelPosition = lpLeft
       TabOrder = 0
     end
-    object LabeledEdit6: TLabeledEdit
+    object edtPassword: TLabeledEdit
       Left = 48
       Height = 23
       Top = 32

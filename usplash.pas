@@ -5,13 +5,14 @@ unit usplash;
 interface
 
 uses
-  Classes, SysUtils, Forms, Controls, Graphics, Dialogs, StdCtrls;
+  Classes, SysUtils, Forms, Controls, Graphics, Dialogs, StdCtrls, ExtCtrls;
 
 type
 
   { TfrmSplash }
 
   TfrmSplash = class(TForm)
+    Image1: TImage;
     Label1: TLabel;
     Label2: TLabel;
   private
