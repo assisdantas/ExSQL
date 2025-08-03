@@ -10,8 +10,8 @@
         <IsPartOfProject Value="True"/>
         <EditorIndex Value="5"/>
         <TopLine Value="13"/>
-        <CursorPos X="19" Y="24"/>
-        <UsageCount Value="60"/>
+        <CursorPos Y="21"/>
+        <UsageCount Value="72"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
@@ -20,9 +20,10 @@
         <ComponentName Value="frmMain"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
-        <TopLine Value="499"/>
-        <CursorPos X="26" Y="509"/>
-        <UsageCount Value="60"/>
+        <IsVisibleTab Value="True"/>
+        <TopLine Value="558"/>
+        <CursorPos X="19" Y="562"/>
+        <UsageCount Value="72"/>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
       </Unit>
@@ -32,21 +33,18 @@
         <ComponentName Value="frmCreateConn"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="1"/>
-        <TopLine Value="145"/>
-        <CursorPos X="3" Y="200"/>
-        <UsageCount Value="44"/>
+        <TopLine Value="221"/>
+        <CursorPos Y="163"/>
+        <UsageCount Value="56"/>
         <Loaded Value="True"/>
-        <LoadedDesigner Value="True"/>
       </Unit>
       <Unit>
         <Filename Value="utils.pas"/>
         <IsPartOfProject Value="True"/>
         <EditorIndex Value="2"/>
-        <TopLine Value="204"/>
-        <CursorPos X="43" Y="227"/>
-        <UsageCount Value="41"/>
+        <CursorPos X="29" Y="176"/>
+        <UsageCount Value="53"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
@@ -57,16 +55,16 @@
         <ResourceBaseClass Value="Form"/>
         <EditorIndex Value="4"/>
         <CursorPos X="17" Y="17"/>
-        <UsageCount Value="40"/>
+        <UsageCount Value="52"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
         <Filename Value="uconnfactory.pas"/>
         <IsPartOfProject Value="True"/>
         <EditorIndex Value="3"/>
-        <TopLine Value="104"/>
-        <CursorPos X="49" Y="123"/>
-        <UsageCount Value="30"/>
+        <TopLine Value="42"/>
+        <CursorPos X="20" Y="59"/>
+        <UsageCount Value="42"/>
         <Loaded Value="True"/>
       </Unit>
       <Unit>
@@ -75,7 +73,7 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="232"/>
         <CursorPos X="36" Y="255"/>
-        <UsageCount Value="9"/>
+        <UsageCount Value="8"/>
       </Unit>
       <Unit>
         <Filename Value="C:\lazarus\components\synedit\syncompletion.pas"/>
@@ -83,7 +81,7 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="325"/>
         <CursorPos X="61" Y="342"/>
-        <UsageCount Value="11"/>
+        <UsageCount Value="10"/>
       </Unit>
       <Unit>
         <Filename Value="C:\lazarus\fpc\3.2.2\source\packages\fcl-db\src\sqldb\sqldb.pp"/>
@@ -91,14 +89,14 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="8"/>
         <CursorPos X="3" Y="27"/>
-        <UsageCount Value="13"/>
+        <UsageCount Value="12"/>
       </Unit>
       <Unit>
         <Filename Value="C:\lazarus\fpc\3.2.2\source\packages\fcl-db\src\base\sqltypes.pp"/>
         <UnitName Value="SQLTypes"/>
         <EditorIndex Value="-1"/>
         <CursorPos Y="12"/>
-        <UsageCount Value="13"/>
+        <UsageCount Value="12"/>
       </Unit>
       <Unit>
         <Filename Value="C:\lazarus\fpc\3.2.2\source\packages\fcl-db\src\sqldb\sqldblib.pp"/>
@@ -106,13 +104,13 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="12"/>
         <CursorPos X="28" Y="32"/>
-        <UsageCount Value="9"/>
+        <UsageCount Value="8"/>
       </Unit>
       <Unit>
         <Filename Value="C:\lazarus\lcl\include\control.inc"/>
         <EditorIndex Value="-1"/>
-        <TopLine Value="3597"/>
-        <CursorPos Y="3613"/>
+        <TopLine Value="1705"/>
+        <CursorPos Y="1721"/>
         <UsageCount Value="9"/>
       </Unit>
       <Unit>
@@ -120,136 +118,158 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="6517"/>
         <CursorPos Y="6533"/>
-        <UsageCount Value="9"/>
+        <UsageCount Value="8"/>
       </Unit>
       <Unit>
         <Filename Value="C:\lazarus\fpc\3.2.2\source\packages\fcl-db\src\base\dataset.inc"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="1511"/>
         <CursorPos Y="1529"/>
+        <UsageCount Value="8"/>
+      </Unit>
+      <Unit>
+        <Filename Value="C:\lazarus\lcl\intfgraphics.pas"/>
+        <UnitName Value="IntfGraphics"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="3333"/>
+        <CursorPos Y="3352"/>
         <UsageCount Value="9"/>
+      </Unit>
+      <Unit>
+        <Filename Value="C:\lazarus\lcl\include\containedaction.inc"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="78"/>
+        <CursorPos Y="98"/>
+        <UsageCount Value="9"/>
+      </Unit>
+      <Unit>
+        <Filename Value="C:\lazarus\fpc\3.2.2\source\packages\fcl-db\src\base\database.inc"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="437"/>
+        <CursorPos X="26" Y="454"/>
+        <UsageCount Value="10"/>
       </Unit>
     </Units>
     <JumpHistory HistoryIndex="29">
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="279" Column="34" TopLine="261"/>
+        <Caret Line="569" Column="3" TopLine="541"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="281" Column="70" TopLine="268"/>
+        <Caret Line="568" Column="3" TopLine="540"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="276" Column="28" TopLine="264"/>
+        <Caret Line="567" Column="3" TopLine="539"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="156" Column="16" TopLine="138"/>
+        <Caret Line="580" Column="29" TopLine="544"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="281" Column="69" TopLine="264"/>
-      </Position>
-      <Position>
-        <Filename Value="uconnfactory.pas"/>
-        <Caret Line="85" Column="21" TopLine="67"/>
+        <Caret Line="574" Column="33" TopLine="555"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="270" TopLine="264"/>
-      </Position>
-      <Position>
-        <Filename Value="uconnfactory.pas"/>
-        <Caret Line="47" Column="35" TopLine="31"/>
-      </Position>
-      <Position>
-        <Filename Value="uconnfactory.pas"/>
-        <Caret Line="99" Column="30" TopLine="75"/>
+        <Caret Line="667" Column="49" TopLine="649"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="285" Column="24" TopLine="274"/>
-      </Position>
-      <Position>
-        <Filename Value="utils.pas"/>
-        <Caret Line="166" Column="50" TopLine="149"/>
+        <Caret Line="570" Column="32" TopLine="552"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="285" TopLine="261"/>
+        <Caret Line="147" Column="65" TopLine="315"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="286" TopLine="262"/>
+        <Caret Line="584" Column="20" TopLine="556"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="285" TopLine="261"/>
-      </Position>
-      <Position>
-        <Filename Value="uconnfactory.pas"/>
-        <Caret Line="121" Column="23" TopLine="105"/>
+        <Caret Line="13" Column="29"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="272" Column="4" TopLine="262"/>
+        <Caret Line="542" Column="33" TopLine="601"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="615" Column="3" TopLine="615"/>
+        <Caret Line="688" Column="45" TopLine="675"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="608" Column="33" TopLine="605"/>
-      </Position>
-      <Position>
-        <Filename Value="ucreateconn.pas"/>
-        <Caret Line="43" Column="42" TopLine="27"/>
+        <Caret Line="689" Column="45" TopLine="676"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="654" Column="28" TopLine="630"/>
-      </Position>
-      <Position>
-        <Filename Value="ucreateconn.pas"/>
-        <Caret Line="245" Column="33" TopLine="41"/>
+        <Caret Line="690" Column="45" TopLine="677"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="144" Column="50" TopLine="122"/>
+        <Caret Line="691" Column="45" TopLine="678"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="509" Column="26" TopLine="639"/>
+        <Caret Line="693" Column="45" TopLine="680"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="677" Column="51" TopLine="651"/>
-      </Position>
-      <Position>
-        <Filename Value="ucreateconn.pas"/>
-        <Caret Line="98" Column="28" TopLine="92"/>
+        <Caret Line="756" Column="25" TopLine="728"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="669" Column="35" TopLine="658"/>
+        <Caret Line="696" Column="33" TopLine="680"/>
       </Position>
       <Position>
         <Filename Value="umain.pas"/>
-        <Caret Line="144" Column="21" TopLine="127"/>
+        <Caret Line="710" Column="32" TopLine="680"/>
       </Position>
       <Position>
-        <Filename Value="ucreateconn.pas"/>
-        <Caret Line="94" Column="25" TopLine="85"/>
+        <Filename Value="umain.pas"/>
+        <Caret Line="755" Column="126" TopLine="738"/>
       </Position>
       <Position>
-        <Filename Value="ucreateconn.pas"/>
-        <Caret Line="102" Column="28" TopLine="85"/>
+        <Filename Value="umain.pas"/>
+        <Caret Line="693" Column="35" TopLine="679"/>
       </Position>
       <Position>
-        <Filename Value="ucreateconn.pas"/>
-        <Caret Line="41" Column="26" TopLine="25"/>
+        <Filename Value="umain.pas"/>
+        <Caret Line="566" Column="35" TopLine="557"/>
+      </Position>
+      <Position>
+        <Filename Value="umain.pas"/>
+        <Caret Line="180" Column="32" TopLine="166"/>
+      </Position>
+      <Position>
+        <Filename Value="umain.pas"/>
+        <Caret Line="179" Column="32" TopLine="179"/>
+      </Position>
+      <Position>
+        <Filename Value="umain.pas"/>
+        <Caret Line="197" TopLine="466"/>
+      </Position>
+      <Position>
+        <Filename Value="umain.pas"/>
+        <Caret Line="579" Column="62" TopLine="562"/>
+      </Position>
+      <Position>
+        <Filename Value="umain.pas"/>
+        <Caret Line="147" Column="59" TopLine="136"/>
+      </Position>
+      <Position>
+        <Filename Value="umain.pas"/>
+        <Caret Line="575" Column="61" TopLine="562"/>
+      </Position>
+      <Position>
+        <Filename Value="umain.pas"/>
+        <Caret Line="147" Column="41" TopLine="131"/>
+      </Position>
+      <Position>
+        <Filename Value="umain.pas"/>
+        <Caret Line="570" Column="35" TopLine="579"/>
       </Position>
     </JumpHistory>
     <RunParams>

@@ -6,7 +6,7 @@ interface
 
 uses
   Classes, SysUtils, SQLDB, SQLDBLib, DB, MSSQLConn, PQConnection, OracleConnection, ODBCConn, SQLite3Conn, IBConnection,
-  mysql80conn, Contnrs, Dialogs;
+  mysql80conn, Contnrs, Dialogs, Generics.Collections;
 
 type
 
@@ -31,20 +31,32 @@ TConnectionInfo = class
     aName, aHost, aDatabase, aLibrary, aCharset, aUser, aPassword: String;
 end;
 
+{ Dictionary }
+TDict = specialize TDictionary<String, TCustomConnection>;
+
 { TConnectionManager }
 
 TConnectionManager = class
 private
   FConnections: TFPHashObjectList;
-  class var FInstance: TConnectionManager;  // Variável estática para a instância única
+  FActiveConnections: TDict;
 public
   constructor Create;
   destructor Destroy; override;
+
   function GetOrCreateConnection(Info: TConnectionInfo): TCustomConnection;
+  function DisconnectByName(ConnectionName: String): Boolean;
+  function GetActiveConnection(ConnectionName: String): TCustomConnection;
+  function IsConnected(ConnectionName: String): Boolean;
   procedure CloseAll;
+
+  property DictActiveConnections: TDict read FActiveConnections;
 end;
 
 function GenerateUniqueKey(aName: String): String;
+
+var
+  GlobalConnManager: TConnectionManager;
 
 implementation
 
@@ -62,6 +74,7 @@ constructor TConnectionManager.Create;
 begin
   inherited;
   FConnections := TFPHashObjectList.Create(True);
+  FActiveConnections := TDict.Create;
 end;
 
 destructor TConnectionManager.Destroy;
@@ -69,6 +82,7 @@ begin
   if Assigned(FConnections) then
   begin
     CloseAll;
+    FreeAndNil(FActiveConnections);
     FreeAndNil(FConnections);
   end;
   inherited Destroy;
@@ -83,7 +97,11 @@ begin
   if not Assigned(FConnections) then
     raise Exception.Create('Gerenciador de conexões não inicializado');
 
-  Key := GenerateUniqueKey(Info.aName);
+  Key := Info.aName;
+
+  if FActiveConnections.ContainsKey(Key) then
+    Exit(FActiveConnections.Items[Key]);
+
   ExistingConn := FConnections.Find(Key);
 
   if Assigned(ExistingConn) then
@@ -144,6 +162,7 @@ begin
 
   try
     FConnections.Add(Key, Result);
+    FActiveConnections.Add(Key, Result);
   except
     on E: Exception do
     begin
@@ -151,6 +170,41 @@ begin
       raise Exception.Create('Falha ao adicionar conexão: ' + E.Message);
     end;
   end;
+end;
+
+function TConnectionManager.DisconnectByName(ConnectionName: String): Boolean;
+var
+  Conn: TCustomConnection;
+  i: Integer;
+begin
+  Result := False;
+  if FActiveConnections.TryGetValue(ConnectionName, Conn) then
+  begin
+    if Conn.Connected then
+      Conn.Connected := False;
+    FActiveConnections.Remove(ConnectionName);
+
+    i := FConnections.FindIndexOf(ConnectionName);
+    if i >= 0 then
+      FConnections.Delete(i);
+
+    Result := True;
+  end;
+end;
+
+function TConnectionManager.GetActiveConnection(ConnectionName: String
+  ): TCustomConnection;
+begin
+  if not FActiveConnections.TryGetValue(ConnectionName, Result) then
+    Result := nil;
+end;
+
+function TConnectionManager.IsConnected(ConnectionName: String): Boolean;
+var
+  Conn: TCustomConnection;
+begin
+  Conn := GetActiveConnection(ConnectionName);
+  Result := Assigned(Conn) and Conn.Connected;
 end;
 
 procedure TConnectionManager.CloseAll;
@@ -172,4 +226,3 @@ begin
 end;
 
 end.
-

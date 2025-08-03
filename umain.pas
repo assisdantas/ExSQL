@@ -6,10 +6,11 @@ interface
 
 uses
   Classes, SysUtils, SQLDBLib, SQLDB, IBConnection, SQLite3Conn, DB,
-  oracleconnection, Forms, Controls, Graphics, Dialogs, StdCtrls, DBGrids,
+  Forms, Controls, Graphics, Dialogs, StdCtrls, DBGrids,
   ComCtrls, ExtCtrls, PairSplitter, Buttons, lazutf8, SynEdit,
   SynHighlighterSQL, StrUtils, RegExpr, Windows, SynEditTypes, SynEditKeyCmds,
-  SynCompletion, LCLType, Menus, ActnList, Types;
+  SynCompletion, LCLType, Menus, ActnList, Types, MSSQLConn, PQConnection,
+  OracleConnection, ODBCConn, mysql80conn, Grids;
 
 type
 
@@ -18,6 +19,10 @@ type
   TfrmMain = class(TForm)
     actExecuteSQL: TAction;
     actCommit: TAction;
+    actConnect: TAction;
+    actDisconnect: TAction;
+    actEditSQL: TAction;
+    actScriptExecute: TAction;
     actOpen: TAction;
     actCopyConn: TAction;
     actSave: TAction;
@@ -34,16 +39,10 @@ type
     actEditConn: TAction;
     actDeleteConn: TAction;
     ActionList1: TActionList;
-    Button1: TBitBtn;
-    DataSource1: TDataSource;
     DBGrid1: TDBGrid;
-    EditBanco: TEdit;
-    EditHost: TEdit;
-    EditPorta: TEdit;
-    EditSenha: TEdit;
-    EditUsuario: TEdit;
     FontDialog1: TFontDialog;
     ImageList1: TImageList;
+    ImageList2: TImageList;
     MainMenu1: TMainMenu;
     Memo1: TMemo;
     MenuItem1: TMenuItem;
@@ -66,6 +65,18 @@ type
     MenuItem26: TMenuItem;
     MenuItem27: TMenuItem;
     MenuItem28: TMenuItem;
+    MenuItem29: TMenuItem;
+    MenuItem30: TMenuItem;
+    MenuItem31: TMenuItem;
+    MenuItem32: TMenuItem;
+    PageControl1: TPageControl;
+    PairSplitter1: TPairSplitter;
+    PairSplitterSide1: TPairSplitterSide;
+    PairSplitterSide2: TPairSplitterSide;
+    Panel1: TPanel;
+    Panel3: TPanel;
+    Separator6: TMenuItem;
+    PopupMenu2: TPopupMenu;
     Separator5: TMenuItem;
     Separator4: TMenuItem;
     Separator3: TMenuItem;
@@ -79,28 +90,23 @@ type
     MenuItem9: TMenuItem;
     Separator2: TMenuItem;
     Separator1: TMenuItem;
-    OracleConnection1: TOracleConnection;
-    PairSplitter1: TPairSplitter;
     PairSplitter2: TPairSplitter;
-    PairSplitterSide1: TPairSplitterSide;
-    PairSplitterSide2: TPairSplitterSide;
-    Panel1: TPanel;
-    Panel2: TPanel;
-    Panel3: TPanel;
     Panel4: TPanel;
     PopupMenu1: TPopupMenu;
-    SQLDBLibraryLoader1: TSQLDBLibraryLoader;
-    SQLQuery1: TSQLQuery;
-    SQLTransaction1: TSQLTransaction;
+    Separator7: TMenuItem;
     StatusBar1: TStatusBar;
     SynCompletion1: TSynCompletion;
     SynEdit1: TSynEdit;
     SynSQLSyn1: TSynSQLSyn;
+    TabSheet1: TTabSheet;
     Timer1: TTimer;
     Timer2: TTimer;
     ToolBar1: TToolBar;
     ToolBar2: TToolBar;
     ToolButton1: TToolButton;
+    ToolButton10: TToolButton;
+    ToolButton11: TToolButton;
+    ToolButton12: TToolButton;
     ToolButton2: TToolButton;
     ToolButton3: TToolButton;
     ToolButton4: TToolButton;
@@ -108,15 +114,21 @@ type
     ToolButton6: TToolButton;
     ToolButton7: TToolButton;
     ToolButton8: TToolButton;
+    btnConnect: TToolButton;
+    ToolButton9: TToolButton;
     tvwConnection: TTreeView;
     procedure actCommitExecute(Sender: TObject);
+    procedure actConnectExecute(Sender: TObject);
+    procedure actDisconnectExecute(Sender: TObject);
     procedure actEditConnExecute(Sender: TObject);
+    procedure actEditSQLExecute(Sender: TObject);
     procedure actExecuteSQLExecute(Sender: TObject);
     procedure actNewConnExecute(Sender: TObject);
     procedure actRollbackExecute(Sender: TObject);
-    procedure Button1Click(Sender: TObject);
     procedure DBGrid1TitleClick(Column: TColumn);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
+    procedure FormCreate(Sender: TObject);
+    procedure FormDestroy(Sender: TObject);
     procedure FormResize(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure MenuItem14Click(Sender: TObject);
@@ -130,12 +142,17 @@ type
     procedure Timer1Timer(Sender: TObject);
     procedure Timer2Timer(Sender: TObject);
     procedure tvwConnectionDblClick(Sender: TObject);
+    procedure tvwConnectionSelectionChanged(Sender: TObject);
+    // outras procedures...
+    procedure ExPairSplitterEditorRiseze(Sender: Tobject);
   private
     LastWord, OrderColumn, DirectionColumn: string;
     DoOpen: Boolean;
     procedure ExecuteSQL;
     procedure SelectSQLBlock;
     procedure TitleOrderUpdate(aGrid: TDBGrid; aField, aDirection: String);
+    procedure CreateTabEdit(ConnName: String; ConnType: Integer; Conn: TCustomConnection);
+    procedure VerifyConnStatus;
     function IsSelectSQL(const SQLText: string): Boolean;
     function GetSQLBlockAtCursor(SynEdit: TSynEdit): string;
     function GetCurrentWordAtCursor: string;
@@ -155,13 +172,13 @@ implementation
 {$R *.lfm}
 
 uses
-  ucreateconn, uconnfactory, utils;
+  uconnfactory, ucreateconn, utils;
 
 { TfrmMain }
 
 procedure TfrmMain.FormResize(Sender: TObject);
 begin
-  PairSplitterSide1.Height := Panel2.Height div 2;
+  PairSplitter1.Sides[0].Height := Panel1.Height div 2;
 end;
 
 procedure TfrmMain.FormShow(Sender: TObject);
@@ -271,25 +288,22 @@ begin
 end;
 
 procedure TfrmMain.tvwConnectionDblClick(Sender: TObject);
-var
-  ConnectionInfo: TConnectionInfo;
-  ConnectionManager: TConnectionManager;
-  Conn: TCustomConnection;
 begin
-  ConnectionInfo := TConnectionInfo.Create;
-  ConnectionManager := TConnectionManager.Create;
+  btnConnect.Click;
+end;
 
-  try
-    if Assigned(tvwConnection.Selected) and Assigned(tvwConnection.Selected.Data) then
-    begin
-      ConnectionInfo := TConnectionInfo(tvwConnection.Selected.Data);
-      Conn := ConnectionManager.GetOrCreateConnection(ConnectionInfo);
-      Conn.Connected := True;
-    end;
-  finally
-    ConnectionManager.Free;
-    ConnectionInfo.Free;
-  end;
+procedure TfrmMain.tvwConnectionSelectionChanged(Sender: TObject);
+begin
+  if not Assigned(tvwConnection.Selected) then
+    Exit;
+
+  if not Assigned(tvwConnection.Selected.Data) then
+    Exit;
+end;
+
+procedure TfrmMain.ExPairSplitterEditorRiseze(Sender: Tobject);
+begin
+  TPairSplitter(Sender).Position := TPairSplitter(Sender).Parent.ClientWidth div 2;
 end;
 
 procedure TfrmMain.ExecuteSQL;
@@ -314,7 +328,7 @@ begin
   if aSQL.EndsWith(';') then
     Delete(aSQL, Length(aSQL), 1);
 
-  with SQLQuery1 do
+  {with SQLQuery1 do
   begin
     Close;
     Clear;
@@ -396,7 +410,7 @@ begin
         end;
       end;
     end;
-  end;
+  end;}
 end;
 
 procedure TfrmMain.SelectSQLBlock;
@@ -536,79 +550,102 @@ begin
   end;
 end;
 
-procedure TfrmMain.Button1Click(Sender: TObject);
+procedure TfrmMain.CreateTabEdit(ConnName: String; ConnType: Integer; Conn: TCustomConnection);
 var
-  i: Integer;
-  TextBox: TControl;
+  Tab: TTabSheet;
+  PairSplitterEditor: TPairSplitter;
+  SQLEditor: TSynEdit;
+  DataGrid: TDBGrid;
+  SQLQuery: TSQLQuery;
+  SQLScript: TSQLScript;
+  Trans: TSQLTransaction;
+  DS: TDataSource;
+  DB: TDatabase;
 begin
-  for i := 0 to Panel1.ControlCount -1 do
-  begin
-    if Panel1.Controls[i] is TEdit then
-      TextBox := Panel1.Controls[i];
+  Tab := TTabSheet.Create(PageControl1);
+  Tab.PageControl := PageControl1;
+  Tab.Caption := 'Editor <'+ConnName+'>';
 
-    if (Trim(TEdit(TextBox).Text) = '') then
-    begin
-      MessageDlg('Informação',
-        'Informe o "'+TEdit(TextBox).TextHint+'" na caixa.',
-        mtWarning, [mbOk], 0, mbOk);
-      TEdit(TextBox).SetFocus;
-      Exit;
-    end;
+  PairSplitterEditor := TPairSplitter.Create(Tab);
+  PairSplitterEditor.Parent := Tab;
+  PairSplitterEditor.Align := alClient;
+  PairSplitterEditor.SplitterType := pstVertical;
+  PairSplitterEditor.Cursor := crVSplit;
+  PairSplitterEditor.Position := Tab.ClientWidth div 2;
+  PairSplitterEditor.OnResize := @ExPairSplitterEditorRiseze;
+
+  SQLEditor := TSynEdit.Create(PairSplitterEditor.Sides[0]);
+  SQLEditor.Parent := PairSplitterEditor.Sides[0];
+  SQLEditor.Align := alClient;
+  SQLEditor.Highlighter := SynSQLSyn1;
+  SQLEditor.Font := FontDialog1.Font;
+  // colocar eventos
+
+  case ConnType of
+    Ord(dbMSSQL):
+      DB := TMSSQLConnection(Conn);
+    Ord(dbFirebird):
+      DB := TIBConnection(Conn);
+    Ord(dbPostgres):
+      DB := TPQConnection(Conn);
+    Ord(dbMySQL), Ord(dbMariaDB): // MariaDB também usa TMySQL80Connection
+      DB := TMySQL80Connection(Conn);
+    Ord(dbSQLite3):
+      DB := TSQLite3Connection(Conn);
+    Ord(dbOracle):
+      DB := TOracleConnection(Conn);
+    Ord(dbODBC):
+      DB := TODBCConnection(Conn);
+    else
+      raise Exception.Create('Tipo de conexão não suportado.');
   end;
 
-  with OracleConnection1 do
+  Trans := TSQLTransaction.Create(Tab);
+  Trans.DataBase := DB;
+
+  SQLQuery := TSQLQuery.Create(Tab);
+  SQLQuery.DataBase := DB;
+  SQLQuery.Transaction := Trans;
+
+  DS := TDataSource.Create(nil);
+  DS.DataSet := SQLQuery;
+
+  DataGrid := TDBGrid.Create(PairSplitterEditor.Sides[1]);
+  DataGrid.Parent := PairSplitterEditor.Sides[1];
+  DataGrid.TitleStyle := tsNative;
+  DataGrid.Align := alClient;
+  DataGrid.DataSource := DS;
+end;
+
+procedure TfrmMain.VerifyConnStatus;
+var
+  Info: TConnectionInfo;
+begin
+  Info := TConnectionInfo(tvwConnection.Selected.Data);
+
+  if Assigned(Info) then
   begin
-    if Button1.Caption = 'Conectar' then
+    if GlobalConnManager.IsConnected(Info.aName) then
     begin
-      if SQLDBLibraryLoader1.Enabled then
-      begin
-        SQLDBLibraryLoader1.UnloadLibrary;
-        SQLDBLibraryLoader1.Enabled := False;
-      end;
-
-      Connected := False;
-      HostName := EditHost.Text + StrUtils.IfThen((Trim(EditPorta.Text) = ''), '', ':'+EditPorta.Text);
-      DatabaseName := EditBanco.Text;
-      Password := EditSenha.Text;
-      UserName := EditUsuario.Text;
-
-      try
-        SQLDBLibraryLoader1.Enabled := True;
-        SQLDBLibraryLoader1.LoadLibrary;
-        Connected := True;
-        Button1.Caption := 'Desconectar';
-        StatusBar1.Panels[0].Text := EditUsuario.Text;
-        StatusBar1.Panels[1].Text := EditBanco.Text+'@'+EditHost.Text+':'+EditPorta.Text;
-      except
-        on E: Exception do
-        begin
-          Button1.Caption := 'Conectar';
-          MessageDlg('Erro', 'Erro ao conectar: "' + E.Message + '"', mtError, [mbOk], 0, mbOk);
-        end;
-      end;
+      actDisconnect.Enabled := True;
+      actConnect.Enabled := False;
     end else
     begin
-      if SQLDBLibraryLoader1.Enabled then
-      begin
-        SQLDBLibraryLoader1.UnloadLibrary;
-        SQLDBLibraryLoader1.Enabled := False;
-        Connected := False;
-        StatusBar1.Panels[0].Text := '';
-        StatusBar1.Panels[1].Text := 'Desconectado';
-      end;
+      actDisconnect.Enabled := False;
+      actConnect.Enabled := True;
     end;
   end;
 end;
 
 procedure TfrmMain.actExecuteSQLExecute(Sender: TObject);
 begin
-  if not OracleConnection1.Connected then
+  {if not OracleConnection1.Connected then
   begin
     MessageDlg('Conexão',
       'Não conectado ao banco.',
       mtWarning, [mbOk], 0, mbOk);
     Exit;
-  end;
+  end;}
 
 
   if (Trim(SynEdit1.Text) <> '') then
@@ -627,7 +664,7 @@ end;
 
 procedure TfrmMain.actRollbackExecute(Sender: TObject);
 begin
-  if MessageDlg('Rollback',
+  {if MessageDlg('Rollback',
     'Deseja desfazer alterações feitas?',
     mtConfirmation, [mbYes, mbNo], 0, mbNo) = mrYes then
   begin
@@ -635,12 +672,12 @@ begin
     Memo1.Lines.Add(GetDateTime+': Alterações anteriores descartadas.');
     actRollback.Enabled := False;
     actCommit.Enabled := False;
-  end;
+  end;}
 end;
 
 procedure TfrmMain.actCommitExecute(Sender: TObject);
 begin
-  if MessageDlg('Commit',
+  {if MessageDlg('Commit',
     'Deseja aplicar alterações feitas?',
     mtConfirmation, [mbYes, mbNo], 0, mbNo) = mrYes then
   begin
@@ -648,6 +685,34 @@ begin
     Memo1.Lines.Add(GetDateTime+': As alterações foram aplicadas.');
     actRollback.Enabled := False;
     actCommit.Enabled := False;
+  end;}
+end;
+
+procedure TfrmMain.actConnectExecute(Sender: TObject);
+var
+  ConnectionInfo: TConnectionInfo;
+  Conn: TCustomConnection;
+begin
+  if Assigned(tvwConnection.Selected) and Assigned(tvwConnection.Selected.Data) then
+  begin
+    ConnectionInfo := TConnectionInfo(tvwConnection.Selected.Data);
+    Conn := GlobalConnManager.GetOrCreateConnection(ConnectionInfo);
+    Conn.Connected := True;
+    tvwConnection.Selected.ImageIndex := 0;
+    actConnect.Enabled := False;
+    actDisconnect.Enabled := True;
+    actEditSQL.Enabled := True;
+  end;
+end;
+
+procedure TfrmMain.actDisconnectExecute(Sender: TObject);
+begin
+  if Assigned(tvwConnection.Selected) then
+  begin
+    GlobalConnManager.DisconnectByName(tvwConnection.Selected.Text);
+    actDisconnect.Enabled := False;
+    actConnect.Enabled := True;
+    actEditSQL.Enabled := False;
   end;
 end;
 
@@ -655,30 +720,35 @@ procedure TfrmMain.actEditConnExecute(Sender: TObject);
 var
   ConnectionInfo: TConnectionInfo;
 begin
-  ConnectionInfo := TConnectionInfo.Create;
+  if Assigned(tvwConnection.Selected) and Assigned(tvwConnection.Selected.Data) then
+  begin
+    ConnectionInfo := TConnectionInfo(tvwConnection.Selected.Data);
+  end;
 
-  try
-    if Assigned(tvwConnection.Selected) and Assigned(tvwConnection.Selected.Data) then
-    begin
-      ConnectionInfo := TConnectionInfo(tvwConnection.Selected.Data);
-    end;
+  with frmCreateConn do
+  begin
+    Editing := True;
+    cbbType.ItemIndex := ConType(ConnectionInfo.aCodType);
+    edtLibrary.Text := ConnectionInfo.aLibrary;
+    edtCharset.Text := ConnectionInfo.aCharset;
+    edtName.Text := ConnectionInfo.aName;
+    edtHost.Text := ConnectionInfo.aHost;
+    edtPort.Text := IntToStr(ConnectionInfo.aPort);
+    edtDatabase.Text := ConnectionInfo.aDatabase;
+    edtuser.Text := ConnectionInfo.aDatabase;
+    edtPassword.Text := ConnectionInfo.aPassword;
+    Show;
+  end;
+end;
 
-    with frmCreateConn do
-    begin
-      Editing := True;
-      cbbType.ItemIndex := ConType(ConnectionInfo.aCodType);
-      edtLibrary.Text := ConnectionInfo.aLibrary;
-      edtCharset.Text := ConnectionInfo.aCharset;
-      edtName.Text := ConnectionInfo.aName;
-      edtHost.Text := ConnectionInfo.aHost;
-      edtPort.Text := IntToStr(ConnectionInfo.aPort);
-      edtDatabase.Text := ConnectionInfo.aDatabase;
-      edtuser.Text := ConnectionInfo.aDatabase;
-      edtPassword.Text := ConnectionInfo.aPassword;
-      Show;
-    end;
-  finally
-    ConnectionInfo.Free;
+procedure TfrmMain.actEditSQLExecute(Sender: TObject);
+var
+  ConnectionInfo: TConnectionInfo;
+begin
+  if Assigned(tvwConnection.Selected) and Assigned(tvwConnection.Selected.Data) then
+  begin
+    ConnectionInfo := TConnectionInfo(tvwConnection.Selected.Data);
+    CreateTabEdit(ConnectionInfo.aName, ConnectionInfo.aCodType, GlobalConnManager.GetActiveConnection(ConnectionInfo.aName));
   end;
 end;
 
@@ -686,7 +756,7 @@ procedure TfrmMain.DBGrid1TitleClick(Column: TColumn);
 var
   OriginSQL: String;
 begin
-  if (SQLQuery1.Active) and (not SQLQuery1.IsEmpty) and (DoOpen) then
+  {if (SQLQuery1.Active) and (not SQLQuery1.IsEmpty) and (DoOpen) then
   begin
     if OrderColumn = Column.FieldName then
       DirectionColumn := StrUtils.IfThen(DirectionColumn = 'ASC', 'DESC', 'ASC')
@@ -707,7 +777,7 @@ begin
 
     SQLQuery1.Open;
     TitleOrderUpdate(DBGrid1, OrderColumn, DirectionColumn);
-  end;
+  end;}
 end;
 
 procedure TfrmMain.FormClose(Sender: TObject; var CloseAction: TCloseAction);
@@ -715,5 +785,14 @@ begin
   ClearConnections;
 end;
 
-end.
+procedure TfrmMain.FormCreate(Sender: TObject);
+begin
+  GlobalConnManager := TConnectionManager.Create;
+end;
 
+procedure TfrmMain.FormDestroy(Sender: TObject);
+begin
+  GlobalConnManager.Free;
+end;
+
+end.

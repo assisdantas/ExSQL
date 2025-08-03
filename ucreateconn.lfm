@@ -1,7 +1,7 @@
 object frmCreateConn: TfrmCreateConn
-  Left = 2019
+  Left = 1927
   Height = 362
-  Top = 149
+  Top = 199
   Width = 312
   BorderIcons = [biSystemMenu]
   BorderStyle = bsSingle
