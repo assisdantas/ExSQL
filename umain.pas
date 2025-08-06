@@ -39,7 +39,6 @@ type
     actEditConn: TAction;
     actDeleteConn: TAction;
     ActionList1: TActionList;
-    DBGrid1: TDBGrid;
     FontDialog1: TFontDialog;
     ImageList1: TImageList;
     ImageList2: TImageList;
@@ -70,9 +69,6 @@ type
     MenuItem31: TMenuItem;
     MenuItem32: TMenuItem;
     PageControl1: TPageControl;
-    PairSplitter1: TPairSplitter;
-    PairSplitterSide1: TPairSplitterSide;
-    PairSplitterSide2: TPairSplitterSide;
     Panel1: TPanel;
     Panel3: TPanel;
     Separator6: TMenuItem;
@@ -96,9 +92,7 @@ type
     Separator7: TMenuItem;
     StatusBar1: TStatusBar;
     SynCompletion1: TSynCompletion;
-    SynEdit1: TSynEdit;
     SynSQLSyn1: TSynSQLSyn;
-    TabSheet1: TTabSheet;
     Timer1: TTimer;
     Timer2: TTimer;
     ToolBar1: TToolBar;
@@ -125,6 +119,7 @@ type
     procedure actExecuteSQLExecute(Sender: TObject);
     procedure actNewConnExecute(Sender: TObject);
     procedure actRollbackExecute(Sender: TObject);
+    procedure actScriptExecuteExecute(Sender: TObject);
     procedure DBGrid1TitleClick(Column: TColumn);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormCreate(Sender: TObject);
@@ -148,7 +143,8 @@ type
   private
     LastWord, OrderColumn, DirectionColumn: string;
     DoOpen: Boolean;
-    procedure ExecuteSQL;
+    procedure ExecuteSQL(aQuery: TSQLQuery; aScript: TSQLScript; aTrans: TSQLTransaction; aWhich: String);
+    procedure PrepareExecSQL(Which: String);
     procedure SelectSQLBlock;
     procedure TitleOrderUpdate(aGrid: TDBGrid; aField, aDirection: String);
     procedure CreateTabEdit(ConnName: String; ConnType: Integer; Conn: TCustomConnection);
@@ -156,7 +152,7 @@ type
     function IsSelectSQL(const SQLText: string): Boolean;
     function GetSQLBlockAtCursor(SynEdit: TSynEdit): string;
     function GetCurrentWordAtCursor: string;
-    function OpenExec(Query: TSQLQuery; Connection: TOracleConnection; aSQL: String): String;
+    function OpenExec(Query: TSQLQuery; aSQL: String): String;
     function RemoveOrderBy(const aSQL: String): String;
     function ConType(aCodType: Integer): Integer;
   public
@@ -306,9 +302,10 @@ begin
   TPairSplitter(Sender).Position := TPairSplitter(Sender).Parent.ClientWidth div 2;
 end;
 
-procedure TfrmMain.ExecuteSQL;
+procedure TfrmMain.ExecuteSQL(aQuery: TSQLQuery; aScript: TSQLScript; aTrans: TSQLTransaction;
+  aWhich: String);
 var
-  ErrorLine: Integer;
+  ErrorLine, RowsAffect: Integer;
   StartCount, EndCount, Frequency: Int64;
   ElapsedNs: Int64;
   Hours, Minutes, Seconds, Nanoseconds: Int64;
@@ -318,99 +315,163 @@ begin
   Panel3.Visible := False;
   Memo1.Clear;
 
-  if Trim(SynEdit1.SelText) <> '' then
-    aSQL := SynEdit1.SelText
-  else
-    aSQL := SynEdit1.Text;
+  try
+    QueryPerformanceFrequency(Frequency);
+    QueryPerformanceCounter(StartCount);
 
-  aSQL := Trim(aSQL);
+    if aWhich = 'query' then
+    begin
+      if Trim(SynEdit1.SelText) <> '' then
+        aSQL := SynEdit1.SelText
+      else
+        aSQL := SynEdit1.Text;
 
-  if aSQL.EndsWith(';') then
-    Delete(aSQL, Length(aSQL), 1);
+      aSQL := Trim(aSQL);
 
-  {with SQLQuery1 do
-  begin
-    Close;
-    Clear;
+      if aSQL.EndsWith(';') then
+        Delete(aSQL, Length(aSQL), 1);
 
-    try
-      QueryPerformanceFrequency(Frequency);
-      QueryPerformanceCounter(StartCount);
-
-      if SQLTransaction1.Active then
-        SQLTransaction1.EndTransaction;
+      if aTrans.Active then
+        aTrans.EndTransaction;
 
       Memo1.Lines.Add(GetDateTime+': Alterações anteriores descartadas.');
 
-      SQLTransaction1.StartTransaction;
+      aTrans.StartTransaction;
 
-      SQL.Text := aSQL;
+      aQuery.SQL.Text := aSQL;
 
-      MsgReturn := OpenExec(SQLQuery1, OracleConnection1, aSQL);
+      MsgReturn := OpenExec(aQuery, aSQL);
 
-      QueryPerformanceCounter(EndCount);
+      RowsAffect := aQuery.RowsAffected;
+    end
+    else if aWhich = 'script' then
+    begin
+      if aTrans.Active then
+        aTrans.EndTransaction;
 
-      ElapsedNs := ((EndCount - StartCount) * 1000000000) div Frequency;
+      Memo1.Lines.Add(GetDateTime+': Alterações anteriores descartadas.');
 
-      Hours := ElapsedNs div 3600000000000;
-      ElapsedNs := ElapsedNs mod 3600000000000;
+      aTrans.StartTransaction;
 
-      Minutes := ElapsedNs div 60000000000;
-      ElapsedNs := ElapsedNs mod 60000000000;
+      aScript.Script := SynEdit1.Lines;
+      aScript.ExecuteScript;
 
-      Seconds := ElapsedNs div 1000000000;
-      ElapsedNs := ElapsedNs mod 1000000000;
+      MsgReturn := 'Linhas afetadas: ';
 
-      Nanoseconds := ElapsedNs;
+      RowsAffect := -1;
+    end;
 
-      FormatedTime := Format('%.2d:%.2d:%.2d:%.9d', [Hours, Minutes, Seconds, Nanoseconds]);
-      Memo1.Lines.Add(GetDateTime+': '+MsgReturn+' '+IntToStr(RowsAffected));
-      Memo1.Lines.Add(GetDateTime+': Informações da execução:');
-      Memo1.Lines.Add('    Tempo de execução: '+FormatedTime);
+    QueryPerformanceCounter(EndCount);
 
-      Panel3.Visible := True;
+    ElapsedNs := ((EndCount - StartCount) * 1000000000) div Frequency;
 
-      ToolButton4.Enabled := True;
-      ToolButton5.Enabled := True;
-    except
-      on E: Exception do
-      begin
-        Screen.Cursor := crDefault;
-        ErrorLine := -1;
+    Hours := ElapsedNs div 3600000000000;
+    ElapsedNs := ElapsedNs mod 3600000000000;
 
-        ToolButton4.Enabled := False;
-        ToolButton5.Enabled := False;
+    Minutes := ElapsedNs div 60000000000;
+    ElapsedNs := ElapsedNs mod 60000000000;
 
-        // Expressão para capturar linha do erro em mensagens do tipo "error at line 3"
-        Reg := TRegExpr.Create;
-        try
-          Reg.Expression := 'line\s+(\d+)';
-          if Reg.Exec(E.Message) then
-          begin
-            ErrorLine := StrToIntDef(Reg.Match[1], -1);
-          end;
-        finally
-          Reg.Free;
-        end;
+    Seconds := ElapsedNs div 1000000000;
+    ElapsedNs := ElapsedNs mod 1000000000;
 
-        // Mostra mensagem de erro
-        Panel3.Visible := True;
-        Memo1.Lines.Add(E.Message);
-        Memo1.SelStart := Length(Memo1.Text);
-        Memo1.SetFocus;
+    Nanoseconds := ElapsedNs;
 
-        // Se conseguiu identificar linha do erro
-        if (ErrorLine > 0) and (ErrorLine <= SynEdit1.Lines.Count) then
+    FormatedTime := Format('%.2d:%.2d:%.2d:%.9d', [Hours, Minutes, Seconds, Nanoseconds]);
+    Memo1.Lines.Add(GetDateTime+': '+MsgReturn+' '+IntToStr(RowsAffect));
+    Memo1.Lines.Add(GetDateTime+': Informações da execução:');
+    Memo1.Lines.Add('    Tempo de execução: '+FormatedTime);
+
+    Panel3.Visible := True;
+
+    ToolButton4.Enabled := True;
+    ToolButton5.Enabled := True;
+  except
+    on E: Exception do
+    begin
+      Screen.Cursor := crDefault;
+      ErrorLine := -1;
+
+      ToolButton4.Enabled := False;
+      ToolButton5.Enabled := False;
+
+      // Expressão para capturar linha do erro em mensagens do tipo "error at line 3"
+      Reg := TRegExpr.Create;
+      try
+        Reg.Expression := 'line\s+(\d+)';
+        if Reg.Exec(E.Message) then
         begin
-          SynEdit1.CaretY := ErrorLine;
-          SynEdit1.SetFocus;
-          // Se quiser também selecionar a linha inteira:
-          SynEdit1.CaretX := 1;
-          SynEdit1.SelectLine;
+          ErrorLine := StrToIntDef(Reg.Match[1], -1);
         end;
+      finally
+        Reg.Free;
+      end;
+
+      // Mostra mensagem de erro
+      Panel3.Visible := True;
+      Memo1.Lines.Add(E.Message);
+      Memo1.SelStart := Length(Memo1.Text);
+      Memo1.SetFocus;
+
+      // Se conseguiu identificar linha do erro
+      if (ErrorLine > 0) and (ErrorLine <= SynEdit1.Lines.Count) then
+      begin
+        SynEdit1.CaretY := ErrorLine;
+        SynEdit1.SetFocus;
+        // Se quiser também selecionar a linha inteira:
+        SynEdit1.CaretX := 1;
+        SynEdit1.SelectLine;
       end;
     end;
+  end;
+end;
+
+procedure TfrmMain.PrepareExecSQL(Which: String);
+var
+  TTab: TTabSheet;
+  TQuery: TSQLQuery;
+  TScript: TSQLScript;
+  TTrans: TSQLTransaction;
+  DBConnected: Boolean;
+begin
+  {if not OracleConnection1.Connected then
+  begin
+    MessageDlg('Conexão',
+      'Não conectado ao banco.',
+      mtWarning, [mbOk], 0, mbOk);
+    Exit;
   end;}
+
+  TTab := PageControl1.ActivePage;
+
+  if not Assigned(TTab) then Exit;
+
+  TQuery := TTab.FindComponent('TabQuery') as TSQLQuery;
+  TScript := TTab.FindComponent('TabScript') as TSQLScript;
+  TTrans := TTab.FindComponent('TabTransac') as TSQLTransaction;
+
+  if Which = 'script' then
+  begin
+    DBConnected := TScript.DataBase.Connected;
+  end
+  else if Which = 'query' then
+  begin
+    DBConnected := TQuery.DataBase.Connected;
+  end;
+
+  if not DBConnected then
+  begin
+    MessageDlg('ExSQL',
+      'A conexão com o banco de dados está fechada.',
+      mtWarning, [mbOk], 0, mbOk);
+    Exit;
+  end;
+
+  if (Trim(SynEdit1.Text) <> '') then
+    ExecuteSQL(TQuery, TScript, TTrans, Which)
+  else
+    MessageDlg('Query',
+      'Nenhuma query informada.',
+      mtInformation, [mbOk], 0, mbOk);
 end;
 
 procedure TfrmMain.SelectSQLBlock;
@@ -487,11 +548,11 @@ begin
   end;
 end;
 
-function TfrmMain.OpenExec(Query: TSQLQuery; Connection: TOracleConnection; aSQL: String): String;
+function TfrmMain.OpenExec(Query: TSQLQuery; aSQL: String): String;
 var
   Info: TSQLStatementInfo;
 begin
-  Info := Connection.GetStatementInfo(aSQL);
+  Info := Query.SQLConnection.GetStatementInfo(aSQL);
 
   case Info.StatementType of
     stSelect, stSelectForUpd:
@@ -553,68 +614,75 @@ end;
 procedure TfrmMain.CreateTabEdit(ConnName: String; ConnType: Integer; Conn: TCustomConnection);
 var
   Tab: TTabSheet;
-  PairSplitterEditor: TPairSplitter;
-  SQLEditor: TSynEdit;
-  DataGrid: TDBGrid;
-  SQLQuery: TSQLQuery;
-  SQLScript: TSQLScript;
-  Trans: TSQLTransaction;
-  DS: TDataSource;
-  DB: TDatabase;
+  TabPairSplitterEditor: TPairSplitter;
+  TabSQLEditor: TSynEdit;
+  TabDataGrid: TDBGrid;
+  TabSQLQuery: TSQLQuery;
+  TabSQLScript: TSQLScript;
+  TabTrans: TSQLTransaction;
+  TabDS: TDataSource;
+  TabDB: TDatabase;
 begin
   Tab := TTabSheet.Create(PageControl1);
   Tab.PageControl := PageControl1;
   Tab.Caption := 'Editor <'+ConnName+'>';
 
-  PairSplitterEditor := TPairSplitter.Create(Tab);
-  PairSplitterEditor.Parent := Tab;
-  PairSplitterEditor.Align := alClient;
-  PairSplitterEditor.SplitterType := pstVertical;
-  PairSplitterEditor.Cursor := crVSplit;
-  PairSplitterEditor.Position := Tab.ClientWidth div 2;
-  PairSplitterEditor.OnResize := @ExPairSplitterEditorRiseze;
+  TabPairSplitterEditor := TPairSplitter.Create(Tab);
+  TabPairSplitterEditor.Parent := Tab;
+  TabPairSplitterEditor.Align := alClient;
+  TabPairSplitterEditor.SplitterType := pstVertical;
+  TabPairSplitterEditor.Cursor := crVSplit;
+  TabPairSplitterEditor.Position := Tab.ClientWidth div 2;
+  TabPairSplitterEditor.OnResize := @ExPairSplitterEditorRiseze;
 
-  SQLEditor := TSynEdit.Create(PairSplitterEditor.Sides[0]);
-  SQLEditor.Parent := PairSplitterEditor.Sides[0];
-  SQLEditor.Align := alClient;
-  SQLEditor.Highlighter := SynSQLSyn1;
-  SQLEditor.Font := FontDialog1.Font;
+  TabSQLEditor := TSynEdit.Create(TabPairSplitterEditor.Sides[0]);
+  TabSQLEditor.Parent := TabPairSplitterEditor.Sides[0];
+  TabSQLEditor.Align := alClient;
+  TabSQLEditor.Highlighter := SynSQLSyn1;
+  TabSQLEditor.Font := FontDialog1.Font;
   // colocar eventos
 
   case ConnType of
     Ord(dbMSSQL):
-      DB := TMSSQLConnection(Conn);
+      TabDB := TMSSQLConnection(Conn);
     Ord(dbFirebird):
-      DB := TIBConnection(Conn);
+      TabDB := TIBConnection(Conn);
     Ord(dbPostgres):
-      DB := TPQConnection(Conn);
+      TabDB := TPQConnection(Conn);
     Ord(dbMySQL), Ord(dbMariaDB): // MariaDB também usa TMySQL80Connection
-      DB := TMySQL80Connection(Conn);
+      TabDB := TMySQL80Connection(Conn);
     Ord(dbSQLite3):
-      DB := TSQLite3Connection(Conn);
+      TabDB := TSQLite3Connection(Conn);
     Ord(dbOracle):
-      DB := TOracleConnection(Conn);
+      TabDB := TOracleConnection(Conn);
     Ord(dbODBC):
-      DB := TODBCConnection(Conn);
+      TabDB := TODBCConnection(Conn);
     else
       raise Exception.Create('Tipo de conexão não suportado.');
   end;
 
-  Trans := TSQLTransaction.Create(Tab);
-  Trans.DataBase := DB;
+  TabTrans := TSQLTransaction.Create(Tab);
+  TabTrans.DataBase := TabDB;
+  TabTrans.Name := 'TabTransac';
 
-  SQLQuery := TSQLQuery.Create(Tab);
-  SQLQuery.DataBase := DB;
-  SQLQuery.Transaction := Trans;
+  TabSQLQuery := TSQLQuery.Create(Tab);
+  TabSQLQuery.DataBase := TabDB;
+  TabSQLQuery.Transaction := TabTrans;
+  TabSQLQuery.Name := 'TabQuery';
 
-  DS := TDataSource.Create(nil);
-  DS.DataSet := SQLQuery;
+  TabSQLScript := TSQLScript.Create(Tab);
+  TabSQLScript.DataBase := TabDB;
+  TabSQLScript.Transaction := TabTrans;
+  TabSQLScript.Name := 'TabScript';
 
-  DataGrid := TDBGrid.Create(PairSplitterEditor.Sides[1]);
-  DataGrid.Parent := PairSplitterEditor.Sides[1];
-  DataGrid.TitleStyle := tsNative;
-  DataGrid.Align := alClient;
-  DataGrid.DataSource := DS;
+  TabDS := TDataSource.Create(Tab);
+  TabDS.DataSet := TabSQLQuery;
+
+  TabDataGrid := TDBGrid.Create(TabPairSplitterEditor.Sides[1]);
+  TabDataGrid.Parent := TabPairSplitterEditor.Sides[1];
+  TabDataGrid.TitleStyle := tsNative;
+  TabDataGrid.Align := alClient;
+  TabDataGrid.DataSource := TabDS;
 end;
 
 procedure TfrmMain.VerifyConnStatus;
@@ -637,25 +705,6 @@ begin
   end;
 end;
 
-procedure TfrmMain.actExecuteSQLExecute(Sender: TObject);
-begin
-  {if not OracleConnection1.Connected then
-  begin
-    MessageDlg('Conexão',
-      'Não conectado ao banco.',
-      mtWarning, [mbOk], 0, mbOk);
-    Exit;
-  end;}
-
-
-  if (Trim(SynEdit1.Text) <> '') then
-    ExecuteSQL
-  else
-    MessageDlg('Query',
-      'Nenhuma query informada.',
-      mtInformation, [mbOk], 0, mbOk);
-end;
-
 procedure TfrmMain.actNewConnExecute(Sender: TObject);
 begin
   frmCreateConn.Editing := False;
@@ -673,6 +722,11 @@ begin
     actRollback.Enabled := False;
     actCommit.Enabled := False;
   end;}
+end;
+
+procedure TfrmMain.actScriptExecuteExecute(Sender: TObject);
+begin
+  PrepareExecSQL('script');
 end;
 
 procedure TfrmMain.actCommitExecute(Sender: TObject);
@@ -750,6 +804,11 @@ begin
     ConnectionInfo := TConnectionInfo(tvwConnection.Selected.Data);
     CreateTabEdit(ConnectionInfo.aName, ConnectionInfo.aCodType, GlobalConnManager.GetActiveConnection(ConnectionInfo.aName));
   end;
+end;
+
+procedure TfrmMain.actExecuteSQLExecute(Sender: TObject);
+begin
+  PrepareExecSQL('query');
 end;
 
 procedure TfrmMain.DBGrid1TitleClick(Column: TColumn);
