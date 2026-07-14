@@ -26,6 +26,10 @@ function GetDateTime: String;
 function EncryptPassword(aPassword: String): String;
 function DecryptPassword(aPassword: String): String;
 procedure LogError(const aMessage: String);
+procedure EnsureHistoryTable;
+procedure AddHistoryEntry(const aConnName, aSQLText: String);
+procedure LoadHistoryEntries(const aConnName: String; aList: TStrings; aMaxRows: Integer = 100);
+function ExtractSQLFromHistoryItem(const aItem: String): String;
 
 type
   { Application.OnException exige "procedure(...) of object"; um procedure
@@ -60,6 +64,7 @@ begin
     try
       MainTrans.DataBase := MainConn;
       MainConn.Connected := True;
+      EnsureHistoryTable;
     except
       on E: Exception do
       begin
@@ -69,6 +74,99 @@ begin
       end;
     end;
   end;
+end;
+
+procedure EnsureHistoryTable;
+var
+  Query: TSQLQuery;
+begin
+  Query := TSQLQuery.Create(nil);
+  Query.DataBase := MainConn;
+  Query.Transaction := MainTrans;
+  try
+    Query.SQL.Text := 'CREATE TABLE IF NOT EXISTS HISTORY (' +
+      'CODHIST INTEGER PRIMARY KEY AUTOINCREMENT, ' +
+      'CONNNAME TEXT, ' +
+      'SQLTEXT TEXT, ' +
+      'EXECDATE TEXT)';
+    Query.ExecSQL;
+    MainTrans.CommitRetaining;
+  finally
+    FreeAndNil(Query);
+  end;
+end;
+
+procedure AddHistoryEntry(const aConnName, aSQLText: String);
+var
+  Query: TSQLQuery;
+begin
+  { Histórico é conveniência, não deve nunca impedir a execução da query em
+    si — qualquer falha aqui (ex.: tabela ainda não criada em um DB antigo)
+    é apenas registrada em log, nunca propagada. }
+  try
+    Query := TSQLQuery.Create(nil);
+    Query.DataBase := MainConn;
+    Query.Transaction := MainTrans;
+    try
+      Query.SQL.Text := 'INSERT INTO HISTORY (CONNNAME, SQLTEXT, EXECDATE) VALUES (:CONNNAME, :SQLTEXT, :EXECDATE)';
+      Query.ParamByName('CONNNAME').AsString := aConnName;
+      Query.ParamByName('SQLTEXT').AsString := aSQLText;
+      Query.ParamByName('EXECDATE').AsString := GetDateTime;
+      Query.ExecSQL;
+      MainTrans.CommitRetaining;
+    finally
+      FreeAndNil(Query);
+    end;
+  except
+    on E: Exception do
+      LogError('Falha ao gravar histórico de query: ' + E.Message);
+  end;
+end;
+
+procedure LoadHistoryEntries(const aConnName: String; aList: TStrings; aMaxRows: Integer);
+var
+  Query: TSQLQuery;
+  SingleLineSQL: String;
+begin
+  { Cada item de aList é "<SQL numa linha só>    (<data/hora>)" — a marcação de
+    data no final é só para exibição; TfrmHistory remove esse sufixo antes de
+    inserir o texto de volta no editor (ver ExtractSQLFromHistoryItem). }
+  aList.Clear;
+  Query := TSQLQuery.Create(nil);
+  Query.DataBase := MainConn;
+  Query.Transaction := MainTrans;
+  try
+    Query.SQL.Text := 'SELECT SQLTEXT, EXECDATE FROM HISTORY WHERE CONNNAME = :CONNNAME ' +
+      'ORDER BY CODHIST DESC LIMIT :MAXROWS';
+    Query.ParamByName('CONNNAME').AsString := aConnName;
+    Query.ParamByName('MAXROWS').AsInteger := aMaxRows;
+    Query.Open;
+    try
+      while not Query.EOF do
+      begin
+        SingleLineSQL := StringReplace(Trim(Query.FieldByName('SQLTEXT').AsString), LineEnding, ' ', [rfReplaceAll]);
+        SingleLineSQL := StringReplace(SingleLineSQL, #10, ' ', [rfReplaceAll]);
+        SingleLineSQL := StringReplace(SingleLineSQL, #13, ' ', [rfReplaceAll]);
+        aList.Add(SingleLineSQL + '    (' + Query.FieldByName('EXECDATE').AsString + ')');
+        Query.Next;
+      end;
+    finally
+      Query.Close;
+    end;
+  finally
+    FreeAndNil(Query);
+  end;
+end;
+
+function ExtractSQLFromHistoryItem(const aItem: String): String;
+var
+  ParenPos: Integer;
+begin
+  ParenPos := LastDelimiter('(', aItem);
+  if ParenPos > 0 then
+    Result := Trim(Copy(aItem, 1, ParenPos - 1))
+  else
+    Result := aItem;
 end;
 
 procedure CreateMainLibLoader;

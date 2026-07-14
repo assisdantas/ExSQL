@@ -10,7 +10,7 @@ uses
   athreads,
   {$ENDIF}
   Interfaces, SysUtils, Dialogs, Classes, PairSplitter, // this includes the LCL widgetset
-  Forms, umain, ucreateconn, utils, usplash, uconnfactory, uabout
+  Forms, umain, ucreateconn, utils, usplash, uconnfactory, uabout, uhistory
   { you can add units after this };
 
 {$R *.res}

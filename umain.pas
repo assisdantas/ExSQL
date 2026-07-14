@@ -10,9 +10,11 @@ uses
   ComCtrls, ExtCtrls, PairSplitter, Buttons, lazutf8, SynEdit,
   SynHighlighterSQL, StrUtils, RegExpr, Windows, SynEditTypes, SynEditKeyCmds,
   SynCompletion, LCLType, Menus, ActnList, Types, MSSQLConn, PQConnection,
-  OracleConnection, ODBCConn, mysql80conn, Grids, uconnfactory, IniFiles;
+  OracleConnection, ODBCConn, mysql80conn, Grids, uconnfactory, IniFiles, TypInfo;
 
 type
+
+  TSQLExecThread = class;
 
   { TfrmMain }
 
@@ -38,6 +40,10 @@ type
     actNewConn: TAction;
     actEditConn: TAction;
     actDeleteConn: TAction;
+    actQueryHistory: TAction;
+    actExportCSV: TAction;
+    actCancelExecution: TAction;
+    TimerExec: TTimer;
     ActionList1: TActionList;
     FontDialog1: TFontDialog;
     OpenDialog1: TOpenDialog;
@@ -134,6 +140,11 @@ type
     procedure actCopyExecute(Sender: TObject);
     procedure actPasteExecute(Sender: TObject);
     procedure actCutExecute(Sender: TObject);
+    procedure actQueryHistoryExecute(Sender: TObject);
+    procedure actExportCSVExecute(Sender: TObject);
+    procedure actCancelExecutionExecute(Sender: TObject);
+    procedure TimerExecTimer(Sender: TObject);
+    procedure tvwConnectionExpanding(Sender: TObject; Node: TTreeNode; var AllowExpansion: Boolean);
     procedure DBGrid1TitleClick(Column: TColumn);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormCreate(Sender: TObject);
@@ -160,9 +171,25 @@ type
     LastWord: string;
     DoOpen: Boolean;
     FBaseCompletionWords: TStringList;
+    { Estado da execução em background (ver TSQLExecThread) — só uma execução
+      por vez em todo o app, já que Memo1/Panel3/StatusBar1 são compartilhados
+      entre abas (não são per-tab), então mesmo antes desta mudança nunca
+      houve suporte real a duas execuções simultâneas visíveis. }
+    FExecThread: TSQLExecThread;
+    FExecTab: TTabSheet;
+    FExecQuery: TSQLQuery;
+    FExecEditor: TSynEdit;
+    FExecConnName: String;
+    FExecConn: TDatabase;
+    FExecStartCount: Int64;
+    FExecCancelRequested: Boolean;
     procedure RefreshSchemaAutocomplete;
-    procedure ExecuteSQL(aSynEdit: TSynEdit; aQuery: TSQLQuery; aScript: TSQLScript; aTrans: TSQLTransaction; aWhich: String);
+    procedure PopulateSchemaNodes(ConnNode: TTreeNode; Info: TConnectionInfo);
+    function GetLastStatementFromScript(const Script: String): String;
     procedure PrepareExecSQL(Which: String);
+    procedure ExecutionThreadDone;
+    function FriendlyFieldTypeName(aType: TFieldType): String;
+    procedure SetColumnTitlesWithTypes(aTab: TTabSheet; aQuery: TSQLQuery);
     procedure SelectSQLBlock(aSynEdit: TSynEdit);
     procedure TitleOrderUpdate(aGrid: TDBGrid; aField, aDirection: String);
     procedure CreateTabEdit(ConnName: String; ConnType: Integer; Conn: TCustomConnection);
@@ -183,6 +210,35 @@ type
 
   end;
 
+  { TSQLExecThread }
+
+  { Executa a query/script em background para permitir cancelar e mostrar um
+    cronômetro sem travar a UI (antes disso, Query.Open/ExecuteScript rodavam
+    direto na thread principal, bloqueando a aplicação inteira até terminar).
+    Só toca em objetos de banco de dados (TSQLQuery/TSQLScript/TSQLTransaction)
+    aqui — nenhum controle visual é acessado fora de Synchronize/da thread
+    principal, já que LCL não é thread-safe. }
+  TSQLExecThread = class(TThread)
+  private
+    FForm: TfrmMain;
+    FQuery: TSQLQuery;
+    FScript: TSQLScript;
+    FTrans: TSQLTransaction;
+    FWhich: String;
+    FSQL: String;
+    FScriptText: String;
+    FHistoryText: String;
+    FErrorMessage: String;
+    FRowsAffected: Integer;
+    FHasError: Boolean;
+    FElapsedNs: Int64;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(aForm: TfrmMain; aQuery: TSQLQuery; aScript: TSQLScript; aTrans: TSQLTransaction;
+      const aWhich, aSQL, aScriptText: String);
+  end;
+
 var
   frmMain: TfrmMain;
   UsuarioWT, SenhaDB, AliasDB, UsuarioDB, CodRotina: String;
@@ -192,7 +248,80 @@ implementation
 {$R *.lfm}
 
 uses
-  ucreateconn, utils, uabout;
+  ucreateconn, utils, uabout, uhistory;
+
+constructor TSQLExecThread.Create(aForm: TfrmMain; aQuery: TSQLQuery; aScript: TSQLScript; aTrans: TSQLTransaction;
+  const aWhich, aSQL, aScriptText: String);
+begin
+  inherited Create(True);
+  FreeOnTerminate := True;
+  FForm := aForm;
+  FQuery := aQuery;
+  FScript := aScript;
+  FTrans := aTrans;
+  FWhich := aWhich;
+  FSQL := aSQL;
+  FScriptText := aScriptText;
+  if FWhich = 'query' then
+    FHistoryText := aSQL
+  else
+    FHistoryText := aScriptText;
+end;
+
+procedure TSQLExecThread.Execute;
+var
+  StartCount, EndCount, Frequency: Int64;
+  LastStatement: String;
+begin
+  FHasError := False;
+  QueryPerformanceFrequency(Frequency);
+  QueryPerformanceCounter(StartCount);
+  try
+    try
+      if FWhich = 'query' then
+      begin
+        if FTrans.Active then
+          FTrans.EndTransaction;
+        FTrans.StartTransaction;
+
+        FQuery.SQL.Text := FSQL;
+        FForm.OpenExec(FQuery, FSQL);
+        FRowsAffected := FQuery.RowsAffected;
+      end
+      else
+      begin
+        if FTrans.Active then
+          FTrans.EndTransaction;
+        FTrans.StartTransaction;
+
+        FScript.Script.Text := FScriptText;
+        FScript.ExecuteScript;
+        FRowsAffected := -1;
+
+        { Convenção comum em clientes SQL: se a última instrução do script for
+          um SELECT, mostra o resultado na grid (reaproveitando a mesma
+          transação já aberta pelo script, sem commitar/descartar nada). }
+        LastStatement := FForm.GetLastStatementFromScript(FScriptText);
+        if (LastStatement <> '') and FForm.IsSelectSQL(LastStatement) then
+        begin
+          FQuery.Close;
+          FQuery.SQL.Text := LastStatement;
+          FQuery.Open;
+        end;
+      end;
+    except
+      on E: Exception do
+      begin
+        FHasError := True;
+        FErrorMessage := E.Message;
+      end;
+    end;
+  finally
+    QueryPerformanceCounter(EndCount);
+    FElapsedNs := ((EndCount - StartCount) * 1000000000) div Frequency;
+    Synchronize(@FForm.ExecutionThreadDone);
+  end;
+end;
 
 { TfrmMain }
 
@@ -353,132 +482,277 @@ begin
     Exit;
 end;
 
+procedure TfrmMain.PopulateSchemaNodes(ConnNode: TTreeNode; Info: TConnectionInfo);
+var
+  Conn: TCustomConnection;
+  SQLConn: TSQLConnection;
+  TempTrans: TSQLTransaction;
+  OwnsTransaction: Boolean;
+  Tables: TStringList;
+  i: Integer;
+  TableNode: TTreeNode;
+begin
+  Conn := GlobalConnManager.GetActiveConnection(Info.aName);
+  if not Assigned(Conn) or not (Conn is TSQLConnection) then Exit;
+  SQLConn := TSQLConnection(Conn);
+
+  { SQLDB proíbe reatribuir Transaction enquanto a atual estiver ativa (evita
+    órfãos de transações pendentes) — então nunca trocamos a Transaction de
+    uma conexão que já tenha uma (ex.: a aba de editor já configurou uma
+    permanente em CreateTabEdit); só criamos uma própria quando a conexão
+    ainda não tem nenhuma (conectado mas nenhuma aba aberta ainda). Rodar a
+    consulta de metadados dentro de uma transação já ativa (com trabalho
+    pendente do usuário) é seguro — é só um SELECT de leitura, não afeta o
+    que está pendente. }
+  OwnsTransaction := not Assigned(SQLConn.Transaction);
+  if OwnsTransaction then
+  begin
+    TempTrans := TSQLTransaction.Create(nil);
+    TempTrans.DataBase := SQLConn;
+    SQLConn.Transaction := TempTrans;
+  end;
+
+  try
+    Tables := TStringList.Create;
+    try
+      try
+        SQLConn.GetTableNames(Tables, False);
+        ConnNode.DeleteChildren;
+        for i := 0 to Tables.Count - 1 do
+        begin
+          TableNode := tvwConnection.Items.AddChild(ConnNode, Tables[i]);
+          { nó placeholder só para exibir a seta de expandir; as colunas de
+            fato são carregadas sob demanda em tvwConnectionExpanding, para
+            não disparar N consultas de metadados logo ao conectar. }
+          tvwConnection.Items.AddChild(TableNode, '...');
+        end;
+        ConnNode.Expand(False);
+      except
+        on E: Exception do
+          LogError('Falha ao carregar tabelas da conexão ' + Info.aName + ': ' + E.Message);
+      end;
+    finally
+      Tables.Free;
+    end;
+  finally
+    if OwnsTransaction then
+    begin
+      if SQLConn.Transaction.Active then
+        SQLConn.Transaction.Commit;
+      SQLConn.Transaction := nil;
+      TempTrans.Free;
+    end;
+  end;
+end;
+
+procedure TfrmMain.tvwConnectionExpanding(Sender: TObject; Node: TTreeNode; var AllowExpansion: Boolean);
+var
+  ConnNode: TTreeNode;
+  Info: TConnectionInfo;
+  Conn: TCustomConnection;
+  SQLConn: TSQLConnection;
+  TempTrans, UseTrans: TSQLTransaction;
+  TempQuery: TSQLQuery;
+  OwnsTransaction: Boolean;
+  i: Integer;
+begin
+  AllowExpansion := True;
+
+  { Só nós de tabela (nível 1, com um único filho placeholder "...") precisam
+    de carregamento sob demanda das colunas. }
+  if (Node.Level <> 1) or (Node.Count <> 1) or (Node.Items[0].Text <> '...') then
+    Exit;
+
+  ConnNode := Node.Parent;
+  if not Assigned(ConnNode) or not Assigned(ConnNode.Data) then Exit;
+  Info := TConnectionInfo(ConnNode.Data);
+
+  Conn := GlobalConnManager.GetActiveConnection(Info.aName);
+  if not Assigned(Conn) or not (Conn is TSQLConnection) then Exit;
+  SQLConn := TSQLConnection(Conn);
+
+  { A maioria dos engines só permite UMA transação ativa por conexão física
+    por vez — criar uma TSQLTransaction própria enquanto a aba já tem uma
+    ativa nessa mesma conexão falha com "cannot start a transaction within a
+    transaction" (não é só sobre a propriedade Connection.Transaction, é uma
+    limitação da conexão real subjacente). Por isso reaproveitamos a
+    Transaction já existente da conexão quando há uma; só criamos uma própria
+    se a conexão ainda não tiver nenhuma (conectado, mas nenhuma aba aberta). }
+  OwnsTransaction := not Assigned(SQLConn.Transaction);
+  if OwnsTransaction then
+  begin
+    TempTrans := TSQLTransaction.Create(nil);
+    TempTrans.DataBase := SQLConn;
+    UseTrans := TempTrans;
+  end
+  else
+  begin
+    TempTrans := nil;
+    UseTrans := SQLConn.Transaction;
+  end;
+
+  TempQuery := TSQLQuery.Create(nil);
+  try
+    TempQuery.DataBase := SQLConn;
+    TempQuery.Transaction := UseTrans;
+
+    { "WHERE 1=0" é uma forma portável entre os 7 engines suportados de pedir
+      só os metadados das colunas (nome + tipo) sem trazer nenhuma linha —
+      GetFieldNames só devolve nomes, sem tipo. }
+    try
+      TempQuery.SQL.Text := 'SELECT * FROM ' + Node.Text + ' WHERE 1=0';
+      TempQuery.Open;
+
+      Node.DeleteChildren;
+      for i := 0 to TempQuery.FieldCount - 1 do
+        tvwConnection.Items.AddChild(Node,
+          TempQuery.Fields[i].FieldName + ' : ' + FriendlyFieldTypeName(TempQuery.Fields[i].DataType));
+
+      TempQuery.Close;
+    except
+      on E: Exception do
+        LogError('Falha ao carregar colunas da tabela ' + Node.Text + ': ' + E.Message);
+    end;
+  finally
+    TempQuery.Free;
+    if OwnsTransaction then
+    begin
+      if TempTrans.Active then
+        TempTrans.Commit;
+      TempTrans.Free;
+    end;
+  end;
+end;
+
 procedure TfrmMain.ExPairSplitterEditorRiseze(Sender: Tobject);
 begin
   TPairSplitter(Sender).Position := TPairSplitter(Sender).Parent.ClientWidth div 2;
 end;
 
-procedure TfrmMain.ExecuteSQL(aSynEdit: TSynEdit; aQuery: TSQLQuery; aScript: TSQLScript; aTrans: TSQLTransaction;
-  aWhich: String);
-var
-  ErrorLine, RowsAffect: Integer;
-  StartCount, EndCount, Frequency: Int64;
-  ElapsedNs: Int64;
-  Hours, Minutes, Seconds, Nanoseconds: Int64;
-  Reg: TRegExpr;
-  FormatedTime, aSQL, MsgReturn: String;
+function TfrmMain.FriendlyFieldTypeName(aType: TFieldType): String;
 begin
-  Panel3.Visible := False;
-  Memo1.Clear;
+  { GetEnumName cobre os ~30 valores de TFieldType de uma vez, sem precisar
+    manter um "case" manual em paralelo à enumeração da RTL. }
+  Result := GetEnumName(TypeInfo(TFieldType), Ord(aType));
+  if (Length(Result) > 2) and (LowerCase(Copy(Result, 1, 2)) = 'ft') then
+    Result := Copy(Result, 3, Length(Result));
+end;
 
-  try
-    QueryPerformanceFrequency(Frequency);
-    QueryPerformanceCounter(StartCount);
+procedure TfrmMain.SetColumnTitlesWithTypes(aTab: TTabSheet; aQuery: TSQLQuery);
+var
+  Grid: TDBGrid;
+  i: Integer;
+begin
+  if not Assigned(aTab) then Exit;
 
-    if aWhich = 'query' then
+  Grid := aTab.FindComponent('TabGrid') as TDBGrid;
+  if not Assigned(Grid) then Exit;
+
+  for i := 0 to Grid.Columns.Count - 1 do
+    if Assigned(Grid.Columns[i].Field) then
+      Grid.Columns[i].Title.Caption := Grid.Columns[i].Field.FieldName + ' : ' +
+        FriendlyFieldTypeName(Grid.Columns[i].Field.DataType);
+end;
+
+procedure TfrmMain.ExecutionThreadDone;
+var
+  Hours, Minutes, Seconds, Nanoseconds, ElapsedNs: Int64;
+  FormatedTime: String;
+  ErrorLine: Integer;
+  Reg: TRegExpr;
+  TDS: TDataSource;
+begin
+  { Chamado via Synchronize a partir de TSQLExecThread.Execute — roda na
+    thread principal, então já pode tocar em controles visuais livremente. }
+  TimerExec.Enabled := False;
+  StatusBar1.Panels[0].Text := '';
+
+  { A grid foi desvinculada da query antes de iniciar a thread (TDS.DataSet :=
+    nil), já que reabrir a query dentro da thread de background dispararia
+    notificações do DataSource para a grid fora da thread principal — proibido
+    em LCL. Revincular aqui faz a grid repaginar com segurança. }
+  if Assigned(FExecTab) then
+  begin
+    TDS := FExecTab.FindComponent('TabDataSource') as TDataSource;
+    if Assigned(TDS) and Assigned(FExecQuery) then
+      TDS.DataSet := FExecQuery;
+  end;
+
+  ElapsedNs := FExecThread.FElapsedNs;
+  Hours := ElapsedNs div 3600000000000;
+  ElapsedNs := ElapsedNs mod 3600000000000;
+  Minutes := ElapsedNs div 60000000000;
+  ElapsedNs := ElapsedNs mod 60000000000;
+  Seconds := ElapsedNs div 1000000000;
+  ElapsedNs := ElapsedNs mod 1000000000;
+  Nanoseconds := ElapsedNs;
+  FormatedTime := Format('%.2d:%.2d:%.2d:%.9d', [Hours, Minutes, Seconds, Nanoseconds]);
+
+  Panel3.Visible := True;
+
+  if FExecThread.FHasError then
+  begin
+    ToolButton4.Enabled := False;
+    ToolButton5.Enabled := False;
+
+    if FExecCancelRequested then
+      Memo1.Lines.Add(GetDateTime + ': Execução cancelada pelo usuário (conexão fechada à força).')
+    else
+      Memo1.Lines.Add(FExecThread.FErrorMessage);
+
+    Memo1.SelStart := Length(Memo1.Text);
+
+    if not FExecCancelRequested and Assigned(FExecEditor) then
     begin
-      if Trim(aSynEdit.SelText) <> '' then
-        aSQL := aSynEdit.SelText
-      else
-        aSQL := aSynEdit.Text;
-
-      aSQL := Trim(aSQL);
-
-      if aSQL.EndsWith(';') then
-        Delete(aSQL, Length(aSQL), 1);
-
-      if aTrans.Active then
-        aTrans.EndTransaction;
-
-      Memo1.Lines.Add(GetDateTime+': Alterações anteriores descartadas.');
-
-      aTrans.StartTransaction;
-
-      aQuery.SQL.Text := aSQL;
-
-      MsgReturn := OpenExec(aQuery, aSQL);
-
-      RowsAffect := aQuery.RowsAffected;
-    end
-    else if aWhich = 'script' then
-    begin
-      if aTrans.Active then
-        aTrans.EndTransaction;
-
-      Memo1.Lines.Add(GetDateTime+': Alterações anteriores descartadas.');
-
-      aTrans.StartTransaction;
-
-      aScript.Script := aSynEdit.Lines;
-      aScript.ExecuteScript;
-
-      MsgReturn := 'Linhas afetadas: ';
-
-      RowsAffect := -1;
-    end;
-
-    QueryPerformanceCounter(EndCount);
-
-    ElapsedNs := ((EndCount - StartCount) * 1000000000) div Frequency;
-
-    Hours := ElapsedNs div 3600000000000;
-    ElapsedNs := ElapsedNs mod 3600000000000;
-
-    Minutes := ElapsedNs div 60000000000;
-    ElapsedNs := ElapsedNs mod 60000000000;
-
-    Seconds := ElapsedNs div 1000000000;
-    ElapsedNs := ElapsedNs mod 1000000000;
-
-    Nanoseconds := ElapsedNs;
-
-    FormatedTime := Format('%.2d:%.2d:%.2d:%.9d', [Hours, Minutes, Seconds, Nanoseconds]);
-    Memo1.Lines.Add(GetDateTime+': '+MsgReturn+' '+IntToStr(RowsAffect));
-    Memo1.Lines.Add(GetDateTime+': Informações da execução:');
-    Memo1.Lines.Add('    Tempo de execução: '+FormatedTime);
-
-    Panel3.Visible := True;
-
-    ToolButton4.Enabled := True;
-    ToolButton5.Enabled := True;
-  except
-    on E: Exception do
-    begin
-      Screen.Cursor := crDefault;
-      ErrorLine := -1;
-
-      ToolButton4.Enabled := False;
-      ToolButton5.Enabled := False;
+      Memo1.SetFocus;
 
       // Expressão para capturar linha do erro em mensagens do tipo "error at line 3"
+      ErrorLine := -1;
       Reg := TRegExpr.Create;
       try
         Reg.Expression := 'line\s+(\d+)';
-        if Reg.Exec(E.Message) then
-        begin
+        if Reg.Exec(FExecThread.FErrorMessage) then
           ErrorLine := StrToIntDef(Reg.Match[1], -1);
-        end;
       finally
         Reg.Free;
       end;
 
-      // Mostra mensagem de erro
-      Panel3.Visible := True;
-      Memo1.Lines.Add(E.Message);
-      Memo1.SelStart := Length(Memo1.Text);
-      Memo1.SetFocus;
-
-      // Se conseguiu identificar linha do erro
-      if (ErrorLine > 0) and (ErrorLine <= aSynEdit.Lines.Count) then
+      if (ErrorLine > 0) and (ErrorLine <= FExecEditor.Lines.Count) then
       begin
-        aSynEdit.CaretY := ErrorLine;
-        aSynEdit.SetFocus;
-        // Se quiser também selecionar a linha inteira:
-        aSynEdit.CaretX := 1;
-        aSynEdit.SelectLine;
+        FExecEditor.CaretY := ErrorLine;
+        FExecEditor.SetFocus;
+        FExecEditor.CaretX := 1;
+        FExecEditor.SelectLine;
       end;
     end;
+  end
+  else
+  begin
+    ToolButton4.Enabled := True;
+    ToolButton5.Enabled := True;
+
+    Memo1.Lines.Add(GetDateTime + ': Alterações anteriores descartadas.');
+    Memo1.Lines.Add(GetDateTime + ': Linhas afetadas: ' + IntToStr(FExecThread.FRowsAffected));
+    Memo1.Lines.Add(GetDateTime + ': Informações da execução:');
+    Memo1.Lines.Add('    Tempo de execução: ' + FormatedTime);
+
+    if Assigned(FExecQuery) and FExecQuery.Active then
+      SetColumnTitlesWithTypes(FExecTab, FExecQuery);
+
+    AddHistoryEntry(FExecConnName, FExecThread.FHistoryText);
   end;
+
+  UpdateActionsForActiveTab;
+  actExecuteSQL.Enabled := True;
+  actScriptExecute.Enabled := True;
+  actCancelExecution.Enabled := False;
+
+  FExecThread := nil;
+  FExecTab := nil;
+  FExecQuery := nil;
+  FExecEditor := nil;
+  FExecConn := nil;
+  FExecCancelRequested := False;
 end;
 
 procedure TfrmMain.PrepareExecSQL(Which: String);
@@ -488,8 +762,18 @@ var
   TScript: TSQLScript;
   TTrans: TSQLTransaction;
   TEditor: TSynEdit;
+  TDS: TDataSource;
   DBConnected: Boolean;
+  aSQL, aScriptText: String;
 begin
+  if Assigned(FExecThread) then
+  begin
+    MessageDlg('ExSQL',
+      'Já existe uma consulta em execução. Aguarde terminar ou clique em Cancelar antes de iniciar outra.',
+      mtWarning, [mbOk], 0, mbOk);
+    Exit;
+  end;
+
   TTab := PageControl1.ActivePage;
 
   if not Assigned(TTab) then Exit;
@@ -498,17 +782,14 @@ begin
   TScript := TTab.FindComponent('TabScript') as TSQLScript;
   TTrans := TTab.FindComponent('TabTransac') as TSQLTransaction;
   TEditor := TTab.FindComponent('TabSQLEditor') as TSynEdit;
+  TDS := TTab.FindComponent('TabDataSource') as TDataSource;
 
   if not Assigned(TEditor) then Exit;
 
   if Which = 'script' then
-  begin
-    DBConnected := TScript.DataBase.Connected;
-  end
-  else if Which = 'query' then
-  begin
+    DBConnected := TScript.DataBase.Connected
+  else
     DBConnected := TQuery.DataBase.Connected;
-  end;
 
   if not DBConnected then
   begin
@@ -518,15 +799,55 @@ begin
     Exit;
   end;
 
-  if (Trim(TEditor.Text) <> '') then
+  if Trim(TEditor.Text) = '' then
   begin
-    ExecuteSQL(TEditor, TQuery, TScript, TTrans, Which);
-    UpdateActionsForActiveTab;
-  end
-  else
     MessageDlg('Query',
       'Nenhuma query informada.',
       mtInformation, [mbOk], 0, mbOk);
+    Exit;
+  end;
+
+  if Which = 'query' then
+  begin
+    if Trim(TEditor.SelText) <> '' then
+      aSQL := TEditor.SelText
+    else
+      aSQL := TEditor.Text;
+
+    aSQL := Trim(aSQL);
+    if aSQL.EndsWith(';') then
+      Delete(aSQL, Length(aSQL), 1);
+  end
+  else
+    aScriptText := TEditor.Text;
+
+  Panel3.Visible := False;
+  Memo1.Clear;
+
+  FExecTab := TTab;
+  FExecQuery := TQuery;
+  FExecEditor := TEditor;
+  FExecConnName := TTab.Hint;
+  FExecConn := TQuery.DataBase;
+  FExecCancelRequested := False;
+
+  { A grid é desvinculada da query antes de disparar a thread: reabrir a query
+    (Query.Open) dentro dela notificaria o DataSource/grid fora da thread
+    principal, o que é proibido em LCL. TDS é revinculado em
+    ExecutionThreadDone, já de volta na thread principal. }
+  if Assigned(TDS) then
+    TDS.DataSet := nil;
+
+  QueryPerformanceCounter(FExecStartCount);
+  StatusBar1.Panels[0].Text := 'Executando... 00:00:00';
+  TimerExec.Enabled := True;
+
+  actExecuteSQL.Enabled := False;
+  actScriptExecute.Enabled := False;
+  actCancelExecution.Enabled := True;
+
+  FExecThread := TSQLExecThread.Create(Self, TQuery, TScript, TTrans, Which, aSQL, aScriptText);
+  FExecThread.Start;
 end;
 
 procedure TfrmMain.SelectSQLBlock(aSynEdit: TSynEdit);
@@ -638,6 +959,33 @@ begin
     Result := Trim(Copy(aSQL, 1, PosOrder - 1))
   else
     Result := aSQL;
+end;
+
+function TfrmMain.GetLastStatementFromScript(const Script: String): String;
+var
+  Parts: TStringList;
+  i: Integer;
+begin
+  { Split ingênuo por ';' (mesmo nível de simplicidade já usado em RemoveOrderBy/
+    SelectSQLBlock nesta base de código) — não trata ';' dentro de strings
+    literais, aceitável para o uso típico de scripts deste app. }
+  Result := '';
+  Parts := TStringList.Create;
+  try
+    Parts.StrictDelimiter := True;
+    Parts.Delimiter := ';';
+    Parts.DelimitedText := Script;
+    for i := Parts.Count - 1 downto 0 do
+    begin
+      if Trim(Parts[i]) <> '' then
+      begin
+        Result := Trim(Parts[i]);
+        Break;
+      end;
+    end;
+  finally
+    Parts.Free;
+  end;
 end;
 
 function TfrmMain.GetCurrentOrderBy(const aSQL: String; out AField, ADirection: String): Boolean;
@@ -799,14 +1147,25 @@ begin
   TabSQLScript.Name := 'TabScript';
 
   TabDS := TDataSource.Create(Tab);
+  TabDS.Name := 'TabDataSource';
   TabDS.DataSet := TabSQLQuery;
 
-  TabDataGrid := TDBGrid.Create(TabPairSplitterEditor.Sides[1]);
+  { Owner é Tab (mesmo motivo do TabSQLEditor: FindComponent só busca entre
+    filhos diretos do Owner) para que SetColumnTitlesWithTypes/ExecutionThreadDone
+    consigam achar a grid via Tab.FindComponent('TabGrid'); o Parent visual
+    continua sendo o painel do splitter. }
+  TabDataGrid := TDBGrid.Create(Tab);
+  TabDataGrid.Name := 'TabGrid';
   TabDataGrid.Parent := TabPairSplitterEditor.Sides[1];
   TabDataGrid.TitleStyle := tsNative;
   TabDataGrid.Align := alClient;
   TabDataGrid.DataSource := TabDS;
   TabDataGrid.OnTitleClick := @DBGrid1TitleClick;
+  { dgEditing vem habilitado por padrão no TDBGrid; como a grid é só para
+    visualizar/ordenar resultado de query, edição inline acidental de célula
+    (sem aviso, sem indicação visual) é desligada — mudanças reais devem ser
+    feitas via SQL explícito (UPDATE/INSERT), não por clique na grid. }
+  TabDataGrid.Options := TabDataGrid.Options - [dgEditing];
 
   PageControl1.ActivePage := Tab;
   UpdateActionsForActiveTab;
@@ -970,6 +1329,7 @@ begin
     actConnect.Enabled := False;
     actDisconnect.Enabled := True;
     actEditSQL.Enabled := True;
+    PopulateSchemaNodes(tvwConnection.Selected, ConnectionInfo);
   end;
 end;
 
@@ -981,6 +1341,7 @@ begin
     actDisconnect.Enabled := False;
     actConnect.Enabled := True;
     actEditSQL.Enabled := False;
+    tvwConnection.Selected.DeleteChildren;
   end;
 end;
 
@@ -1192,6 +1553,14 @@ begin
   ActiveTab := PageControl1.ActivePage;
   if not Assigned(ActiveTab) then Exit;
 
+  if Assigned(FExecThread) and (FExecTab = ActiveTab) then
+  begin
+    MessageDlg('ExSQL',
+      'Esta aba tem uma consulta em execução. Cancele-a antes de fechar a aba.',
+      mtWarning, [mbOk], 0, mbOk);
+    Exit;
+  end;
+
   TTrans := ActiveTab.FindComponent('TabTransac') as TSQLTransaction;
   if Assigned(TTrans) and TTrans.Active then
   begin
@@ -1279,6 +1648,170 @@ begin
     ActiveEditor.CutToClipboard;
 end;
 
+procedure TfrmMain.actQueryHistoryExecute(Sender: TObject);
+var
+  TTab: TTabSheet;
+  ActiveEditor: TSynEdit;
+  ChosenSQL: String;
+begin
+  TTab := PageControl1.ActivePage;
+  if not Assigned(TTab) or (Trim(TTab.Hint) = '') then
+  begin
+    MessageDlg('ExSQL', 'Abra uma aba de editor conectada antes de consultar o histórico.',
+      mtInformation, [mbOk], 0, mbOk);
+    Exit;
+  end;
+
+  ActiveEditor := GetActiveSynEdit;
+  if not Assigned(ActiveEditor) then Exit;
+
+  frmHistory := TfrmHistory.Create(nil);
+  try
+    LoadHistoryEntries(TTab.Hint, frmHistory.History.Items);
+    if frmHistory.History.Items.Count = 0 then
+    begin
+      MessageDlg('Histórico', 'Nenhuma consulta registrada ainda para "' + TTab.Hint + '".',
+        mtInformation, [mbOk], 0, mbOk);
+      Exit;
+    end;
+
+    frmHistory.History.ItemIndex := 0;
+    if frmHistory.ShowModal = mrOK then
+    begin
+      if frmHistory.History.ItemIndex >= 0 then
+      begin
+        ChosenSQL := ExtractSQLFromHistoryItem(frmHistory.History.Items[frmHistory.History.ItemIndex]);
+        ActiveEditor.SelText := ChosenSQL;
+        ActiveEditor.SetFocus;
+      end;
+    end;
+  finally
+    FreeAndNil(frmHistory);
+  end;
+end;
+
+procedure TfrmMain.actExportCSVExecute(Sender: TObject);
+const
+  CSV_SEPARATOR = ',';
+var
+  TTab: TTabSheet;
+  TQuery: TSQLQuery;
+  CSVFile: TextFile;
+  i: Integer;
+  Line, FieldValue: String;
+
+  function CSVEscape(const aValue: String): String;
+  begin
+    Result := aValue;
+    if (Pos(CSV_SEPARATOR, Result) > 0) or (Pos('"', Result) > 0) or
+       (Pos(#13, Result) > 0) or (Pos(#10, Result) > 0) then
+      Result := '"' + StringReplace(Result, '"', '""', [rfReplaceAll]) + '"';
+  end;
+
+begin
+  TTab := PageControl1.ActivePage;
+  if not Assigned(TTab) then Exit;
+
+  TQuery := TTab.FindComponent('TabQuery') as TSQLQuery;
+  if not Assigned(TQuery) or not TQuery.Active or TQuery.IsEmpty then
+  begin
+    MessageDlg('Exportar CSV', 'Não há resultado de query aberto nesta aba para exportar.',
+      mtInformation, [mbOk], 0, mbOk);
+    Exit;
+  end;
+
+  SaveDialog1.Filter := 'Arquivo CSV (*.csv)|*.csv';
+  SaveDialog1.DefaultExt := 'csv';
+  if not SaveDialog1.Execute then Exit;
+
+  AssignFile(CSVFile, SaveDialog1.FileName);
+  try
+    Rewrite(CSVFile);
+
+    Line := '';
+    for i := 0 to TQuery.FieldCount - 1 do
+    begin
+      if i > 0 then Line := Line + CSV_SEPARATOR;
+      Line := Line + CSVEscape(TQuery.Fields[i].FieldName);
+    end;
+    WriteLn(CSVFile, Line);
+
+    TQuery.DisableControls;
+    try
+      TQuery.First;
+      while not TQuery.EOF do
+      begin
+        Line := '';
+        for i := 0 to TQuery.FieldCount - 1 do
+        begin
+          if i > 0 then Line := Line + CSV_SEPARATOR;
+          if TQuery.Fields[i].IsNull then
+            FieldValue := ''
+          else
+            FieldValue := TQuery.Fields[i].AsString;
+          Line := Line + CSVEscape(FieldValue);
+        end;
+        WriteLn(CSVFile, Line);
+        TQuery.Next;
+      end;
+    finally
+      TQuery.EnableControls;
+    end;
+  finally
+    CloseFile(CSVFile);
+  end;
+
+  MessageDlg('Exportar CSV', 'Resultado exportado para "' + SaveDialog1.FileName + '".',
+    mtInformation, [mbOk], 0, mbOk);
+end;
+
+procedure TfrmMain.TimerExecTimer(Sender: TObject);
+var
+  Frequency, CurrentCount, ElapsedNs, TotalSeconds: Int64;
+begin
+  QueryPerformanceFrequency(Frequency);
+  QueryPerformanceCounter(CurrentCount);
+  ElapsedNs := ((CurrentCount - FExecStartCount) * 1000000000) div Frequency;
+  TotalSeconds := ElapsedNs div 1000000000;
+
+  StatusBar1.Panels[0].Text := Format('Executando... %.2d:%.2d:%.2d',
+    [TotalSeconds div 3600, (TotalSeconds div 60) mod 60, TotalSeconds mod 60]);
+end;
+
+procedure TfrmMain.actCancelExecutionExecute(Sender: TObject);
+begin
+  if not Assigned(FExecThread) then Exit;
+
+  if MessageDlg('Cancelar execução',
+    'Tentar cancelar a consulta em execução?' + LineEnding + LineEnding +
+    'Não há uma forma segura e genérica de interromper uma consulta em andamento em ' +
+    'todos os bancos suportados por este app, então o cancelamento força o fechamento ' +
+    'da conexão desta aba. Isso normalmente interrompe a consulta, mas a conexão precisará ' +
+    'ser reaberta depois.',
+    mtConfirmation, [mbYes, mbNo], 0, mbNo) <> mrYes then
+    Exit;
+
+  FExecCancelRequested := True;
+  StatusBar1.Panels[0].Text := 'Cancelando...';
+  actCancelExecution.Enabled := False;
+
+  { Melhor esforço: forçar o fechamento da conexão desta aba, tentando romper
+    a chamada bloqueante que a thread de execução está fazendo. Sem uma API de
+    cancelamento genuína e portável entre os 7 engines suportados (cada driver
+    exige um mecanismo próprio — libpq tem PQcancel, Firebird tem
+    isc_cancel_operation, etc.), esta é a única forma prática de tentar
+    interromper a consulta a partir daqui. }
+  try
+    if Assigned(FExecConn) then
+      FExecConn.Connected := False;
+  except
+    { Ignorado de propósito: fechar a conexão enquanto a thread ainda está no
+      meio de uma chamada bloqueante é uma condição de corrida inerente a essa
+      técnica — se der erro aqui, a thread ainda vai reportar seu próprio erro
+      via ExecutionThreadDone normalmente. }
+  end;
+end;
+
 procedure TfrmMain.DBGrid1TitleClick(Column: TColumn);
 var
   Grid: TDBGrid;
@@ -1328,6 +1861,15 @@ end;
 
 procedure TfrmMain.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
+  if Assigned(FExecThread) then
+  begin
+    MessageDlg('ExSQL',
+      'Há uma consulta em execução. Cancele-a antes de fechar o ExSQL.',
+      mtWarning, [mbOk], 0, mbOk);
+    CloseAction := caNone;
+    Exit;
+  end;
+
   SaveWindowLayout;
   ClearConnections;
 end;
@@ -1342,6 +1884,18 @@ begin
     base ao trocar de aba/conexão (RefreshSchemaAutocomplete). }
   FBaseCompletionWords := TStringList.Create;
   FBaseCompletionWords.Assign(SynCompletion1.ItemList);
+
+  { Atalhos de teclado — antes só existia Ctrl+Space (autocomplete); nenhuma
+    ação de arquivo/execução tinha atalho. Definidos em código (em vez de no
+    .lfm) para usar Menus.ShortCut() em vez de calcular o inteiro codificado
+    manualmente. }
+  actExecuteSQL.ShortCut := Menus.ShortCut(VK_F5, []);
+  actScriptExecute.ShortCut := Menus.ShortCut(VK_F5, [ssShift]);
+  actNew.ShortCut := Menus.ShortCut(VK_N, [ssCtrl]);
+  actOpen.ShortCut := Menus.ShortCut(VK_O, [ssCtrl]);
+  actSave.ShortCut := Menus.ShortCut(VK_S, [ssCtrl]);
+  actSaveAs.ShortCut := Menus.ShortCut(VK_S, [ssCtrl, ssShift]);
+  actClose.ShortCut := Menus.ShortCut(VK_F4, [ssCtrl]);
 end;
 
 procedure TfrmMain.SaveWindowLayout;
