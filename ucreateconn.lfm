@@ -48,6 +48,7 @@ object frmCreateConn: TfrmCreateConn
       ItemHeight = 15
       Style = csDropDownList
       TabOrder = 0
+      OnChange = cbbTypeChange
     end
     object edtLibrary: TLabeledEdit
       Left = 64

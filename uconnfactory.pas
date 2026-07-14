@@ -60,6 +60,9 @@ var
 
 implementation
 
+uses
+  utils;
+
 function GenerateUniqueKey(aName: String): String;
 var
   GUID: TGUID;
@@ -133,31 +136,77 @@ begin
 
   if Result is TMSSQLConnection then
   begin
-
+    { TMSSQLConnection não expõe uma propriedade Port própria; a porta é embutida
+      no HostName no formato 'servidor:porta' (suportado nativamente pelo driver). }
+    if Info.aPort > 0 then
+      TMSSQLConnection(Result).HostName := Info.aHost + ':' + IntToStr(Info.aPort)
+    else
+      TMSSQLConnection(Result).HostName := Info.aHost;
+    TMSSQLConnection(Result).DatabaseName := Info.aDatabase;
+    TMSSQLConnection(Result).UserName := Info.aUser;
+    TMSSQLConnection(Result).Password := DecryptPassword(Info.aPassword);
+    if Info.aCharset <> '' then
+      TMSSQLConnection(Result).CharSet := Info.aCharset;
   end
   else if Result is TIBConnection then
   begin
     TIBConnection(Result).HostName := Info.aHost;
     TIBConnection(Result).DatabaseName := Info.aDatabase;
     TIBConnection(Result).UserName := Info.aUser;
-    TIBConnection(Result).Password := Info.aPassword;
+    TIBConnection(Result).Password := DecryptPassword(Info.aPassword);
     TIBConnection(Result).Port := Info.aPort;
+    if Info.aCharset <> '' then
+      TIBConnection(Result).CharSet := Info.aCharset;
   end
   else if Result is TPQConnection then
   begin
-
+    { TPQConnection não expõe Port como propriedade pública; a porta é passada
+      via Params, que é repassado como parâmetro de conexão bruto ao libpq. }
+    TPQConnection(Result).HostName := Info.aHost;
+    TPQConnection(Result).DatabaseName := Info.aDatabase;
+    TPQConnection(Result).UserName := Info.aUser;
+    TPQConnection(Result).Password := DecryptPassword(Info.aPassword);
+    if Info.aCharset <> '' then
+      TPQConnection(Result).CharSet := Info.aCharset;
+    if Info.aPort > 0 then
+      TPQConnection(Result).Params.Add('port=' + IntToStr(Info.aPort));
   end
   else if Result is TMySQL80Connection then
   begin
-
+    TMySQL80Connection(Result).HostName := Info.aHost;
+    TMySQL80Connection(Result).DatabaseName := Info.aDatabase;
+    TMySQL80Connection(Result).UserName := Info.aUser;
+    TMySQL80Connection(Result).Password := DecryptPassword(Info.aPassword);
+    if Info.aCharset <> '' then
+      TMySQL80Connection(Result).CharSet := Info.aCharset;
+    if Info.aPort > 0 then
+      TMySQL80Connection(Result).Port := Info.aPort;
   end
   else if Result is TOracleConnection then
   begin
-
+    { TOracleConnection monta a EZ connect string como '//HostName/DatabaseName';
+      a porta, quando informada, entra no HostName como 'servidor:porta'. }
+    if Info.aPort > 0 then
+      TOracleConnection(Result).HostName := Info.aHost + ':' + IntToStr(Info.aPort)
+    else
+      TOracleConnection(Result).HostName := Info.aHost;
+    TOracleConnection(Result).DatabaseName := Info.aDatabase;
+    TOracleConnection(Result).UserName := Info.aUser;
+    TOracleConnection(Result).Password := DecryptPassword(Info.aPassword);
   end
   else if Result is TODBCConnection then
   begin
-
+    { TODBCConnection ignora HostName/Port: DatabaseName é o nome do DSN configurado
+      no sistema (ODBC Data Source Administrator). }
+    TODBCConnection(Result).DatabaseName := Info.aDatabase;
+    TODBCConnection(Result).UserName := Info.aUser;
+    TODBCConnection(Result).Password := DecryptPassword(Info.aPassword);
+  end
+  else if Result is TSQLite3Connection then
+  begin
+    TSQLite3Connection(Result).DatabaseName := Info.aDatabase;
+    if Info.aCharset <> '' then
+      TSQLite3Connection(Result).CharSet := Info.aCharset;
   end;
 
   try

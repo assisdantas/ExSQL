@@ -4,3 +4,9 @@ backup/
 *.architect
 *.architect~
 *.dbg
+data/layout.ini
+logs/
+.CLAUDE/
+CLAUDE/
+CLAUDE.md
+.gitignore

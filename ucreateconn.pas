@@ -6,7 +6,7 @@ interface
 
 uses
   Classes, SysUtils, StrUtils, Forms, Controls, Graphics, Dialogs, ExtCtrls,
-  StdCtrls, Buttons, SQLDB;
+  StdCtrls, Buttons, SQLDB, uconnfactory;
 
 type
 
@@ -34,6 +34,7 @@ type
     procedure Button2Click(Sender: TObject);
     procedure btnOpenLibraryClick(Sender: TObject);
     procedure btnOpenDatabaseClick(Sender: TObject);
+    procedure cbbTypeChange(Sender: TObject);
     procedure FormShow(Sender: TObject);
   private
     procedure OpenFile(EditBox: TLabeledEdit);
@@ -43,6 +44,7 @@ type
     function HasEmptyField(Container: TGroupBox): Boolean;
   public
     Editing: Boolean;
+    EditingCodConn: Integer;
   end;
 
 var
@@ -103,6 +105,28 @@ begin
     cbbType.Enabled := False
   else
     cbbType.Enabled := True;
+
+  cbbTypeChange(cbbType);
+end;
+
+procedure TfrmCreateConn.cbbTypeChange(Sender: TObject);
+var
+  SelectedCodType: Integer;
+  LibraryRequired: Boolean;
+begin
+  SelectedCodType := 0;
+  if cbbType.ItemIndex >= 0 then
+    SelectedCodType := PtrInt(cbbType.Items.Objects[cbbType.ItemIndex]);
+
+  LibraryRequired := SelectedCodType in [Ord(dbSQLite3), Ord(dbODBC)];
+
+  if LibraryRequired then
+    edtLibrary.EditLabel.Caption := 'Biblioteca*'
+  else
+    edtLibrary.EditLabel.Caption := 'Biblioteca';
+
+  edtLibrary.Hint := 'Obrigatório apenas para SQLite3 e ODBC; opcional para os demais tipos de banco.';
+  edtLibrary.ShowHint := True;
 end;
 
 procedure TfrmCreateConn.OpenFile(EditBox: TLabeledEdit);
@@ -167,6 +191,8 @@ begin
         ExecSQL;
         MainTrans.Commit;
 
+        LoadConnections;
+
         MessageDlg('ExSQL',
           'A conexão foi criada.',
           mtInformation, [mbOk], 0, mbOk);
@@ -196,8 +222,79 @@ begin
 end;
 
 procedure TfrmCreateConn.UpdateConn;
+var
+  Query: TSQLQuery;
 begin
+  Query := TSQLQuery.Create(nil);
+  Query.DataBase := MainConn;
+  Query.Transaction := MainTrans;
 
+  try
+    try
+      with Query do
+      begin
+        Close;
+        SQL.Clear;
+        SQL.Add('UPDATE CONNECTION SET');
+        SQL.Add('NAME = :NAME,');
+        SQL.Add('DATABASE = :DATABASE,');
+        SQL.Add('HOST = :HOST,');
+        SQL.Add('PORT = :PORT,');
+        SQL.Add('LIBRARY = :LIBRARY,');
+        SQL.Add('CHARSET = :CHARSET,');
+        SQL.Add('USER = :USER');
+        if (Trim(edtPassword.Text) <> '') then SQL.Add(', PASSWORD = :PASSWORD');
+        SQL.Add('WHERE CODCONN = :CODCONN');
+
+        ParamByName('NAME').AsString := edtName.Text;
+        ParamByName('DATABASE').AsString := edtDatabase.Text;
+        if (Trim(edtHost.Text) <> '') then
+          ParamByName('HOST').AsString := edtHost.Text
+        else
+          ParamByName('HOST').Clear;
+        if (Trim(edtPort.Text) <> '') then
+          ParamByName('PORT').AsInteger := StrToInt(edtPort.Text)
+        else
+          ParamByName('PORT').Clear;
+        ParamByName('LIBRARY').AsString := edtLibrary.Text;
+        if (Trim(edtCharset.Text) <> '') then
+          ParamByName('CHARSET').AsString := edtCharset.Text
+        else
+          ParamByName('CHARSET').Clear;
+        if (Trim(edtUser.Text) <> '') then
+          ParamByName('USER').AsString := edtUser.Text
+        else
+          ParamByName('USER').Clear;
+        if (Trim(edtPassword.Text) <> '') then
+          ParamByName('PASSWORD').AsString := EncryptPassword(edtPassword.Text);
+        ParamByName('CODCONN').AsInteger := EditingCodConn;
+
+        if MainTrans.Active then MainTrans.EndTransaction;
+        MainTrans.StartTransaction;
+
+        ExecSQL;
+        MainTrans.Commit;
+
+        LoadConnections;
+
+        MessageDlg('ExSQL',
+          'A conexão foi atualizada.',
+          mtInformation, [mbOk], 0, mbOk);
+
+        Close;
+      end;
+    except
+      on E: Exception do
+      begin
+        MainTrans.Rollback;
+        MessageDlg('ExSQL',
+          'Ocorreu um erro ao atualizar a conexão "'+E.Message+'".',
+          mtError, [mbOk], 0, mbOk);
+      end;
+    end;
+  finally
+    FreeAndNil(Query);
+  end;
 end;
 
 procedure TfrmCreateConn.FormClearFields(Container: TGroupBox);
@@ -223,11 +320,22 @@ function TfrmCreateConn.HasEmptyField(Container: TGroupBox): Boolean;
 const
   IgnoredFields: array[0..4] of string = ('edtCharset', 'edtPort', 'edtHost', 'edtUser', 'edtPassword');
 var
+  SelectedCodType: Integer;
+  LibraryRequired: Boolean;
   i: Integer;
   TextBox: TControl;
   BoxName: String;
 begin
   Result := False;
+
+  SelectedCodType := 0;
+  if cbbType.ItemIndex >= 0 then
+    SelectedCodType := PtrInt(cbbType.Items.Objects[cbbType.ItemIndex]);
+
+  { "Library" (caminho da biblioteca/driver) só faz sentido para SQLite3 (arquivo .dll do
+    driver) e ODBC (driver ODBC); para os demais é irrelevante e não deve bloquear o
+    salvamento da conexão. }
+  LibraryRequired := SelectedCodType in [Ord(dbSQLite3), Ord(dbODBC)];
 
   for i := 0 to Container.ControlCount - 1 do
   begin
@@ -237,6 +345,9 @@ begin
       BoxName := TLabeledEdit(TextBox).Name;
 
       if StrUtils.MatchText(BoxName, IgnoredFields) then
+        Continue;
+
+      if (BoxName = 'edtLibrary') and (not LibraryRequired) then
         Continue;
 
       if (Trim(TLabeledEdit(TextBox).Text) = '') then

@@ -5,7 +5,13 @@ unit utils;
 interface
 
 uses
-  Forms, Classes, SysUtils, Dialogs, LCLType, StdCtrls, ComCtrls, SQLDB, SQLDBLib, SQLite3Conn, StrUtils, BCrypt;
+  Forms, Classes, SysUtils, Dialogs, LCLType, StdCtrls, ComCtrls, SQLDB, SQLDBLib, SQLite3Conn, StrUtils,
+  DCPrijndael, DCPsha256;
+
+const
+  { Chave usada apenas para ofuscar a senha guardada em connections.db contra leitura casual do
+    arquivo. Não é segredo de nível cofre: quem tem acesso ao binário tem acesso à chave. }
+  PASSWORD_CIPHER_KEY = 'ExSQL-Connection-Password-Key-v1';
 
 procedure CreateMainConnection;
 procedure CreateMainLibLoader;
@@ -18,12 +24,21 @@ function GetCurrentDir: String;
 function GetPlatform: String;
 function GetDateTime: String;
 function EncryptPassword(aPassword: String): String;
-function CompareHashPassword(aPassword, aHash: String): Boolean;
+function DecryptPassword(aPassword: String): String;
+procedure LogError(const aMessage: String);
+
+type
+  { Application.OnException exige "procedure(...) of object"; um procedure
+    solto não é compatível, daí este objeto-wrapper só para expor o método. }
+  TAppExceptionHandler = class
+    procedure Handle(Sender: TObject; E: Exception);
+  end;
 
 var
   MainConn: TSQLite3Connection;
   LibLoader: TSQLDBLibraryLoader;
   MainTrans: TSQLTransaction;
+  AppExceptionHandler: TAppExceptionHandler;
 
 implementation
 
@@ -197,8 +212,12 @@ procedure ClearConnections;
 var
   i: Integer;
 begin
+  { Libera o TConnectionInfo (Data) anexado a cada nó; os nós em si são
+    destruídos de uma vez por Items.Clear logo abaixo. Fazer Free em
+    Items[i] diretamente (ao invés de Items[i].Data) destruiria os nós um a
+    um durante a iteração, encolhendo Items.Count e estourando o índice. }
   for i := 0 to frmMain.tvwConnection.Items.Count - 1 do
-    TObject(frmMain.tvwConnection.Items[i]).Free;
+    TObject(frmMain.tvwConnection.Items[i].Data).Free;
   frmMain.tvwConnection.Items.Clear;
 end;
 
@@ -223,15 +242,81 @@ begin
 end;
 
 function EncryptPassword(aPassword: String): String;
+var
+  Cipher: TDCP_rijndael;
 begin
-  Result := TBCrypt.GenerateHash(aPassword);
+  if aPassword = '' then Exit('');
+
+  Cipher := TDCP_rijndael.Create(nil);
+  try
+    Cipher.InitStr(PASSWORD_CIPHER_KEY, TDCP_sha256);
+    Result := Cipher.EncryptString(aPassword);
+  finally
+    Cipher.Burn;
+    Cipher.Free;
+  end;
 end;
 
-function CompareHashPassword(aPassword, aHash: String): Boolean;
+function DecryptPassword(aPassword: String): String;
+var
+  Cipher: TDCP_rijndael;
 begin
-  Result := TBcrypt.CompareHash(aPassword, aHash);
+  if aPassword = '' then Exit('');
+
+  Cipher := TDCP_rijndael.Create(nil);
+  try
+    Cipher.InitStr(PASSWORD_CIPHER_KEY, TDCP_sha256);
+    Result := Cipher.DecryptString(aPassword);
+  finally
+    Cipher.Burn;
+    Cipher.Free;
+  end;
 end;
 
+procedure LogError(const aMessage: String);
+var
+  LogFile: TextFile;
+  LogPath: String;
+begin
+  LogPath := GetCurrentDir + 'logs';
+  if not DirectoryExists(LogPath) then
+    ForceDirectories(LogPath);
+
+  AssignFile(LogFile, LogPath + '\error.log');
+  try
+    if FileExists(LogPath + '\error.log') then
+      Append(LogFile)
+    else
+      Rewrite(LogFile);
+
+    WriteLn(LogFile, '[' + GetDateTime + '] ' + aMessage);
+  finally
+    CloseFile(LogFile);
+  end;
+end;
+
+procedure TAppExceptionHandler.Handle(Sender: TObject; E: Exception);
+begin
+  { Registra em arquivo antes de exibir ao usuário, para permitir diagnóstico
+    pós-morte de erros que o usuário não saiba/consiga descrever. }
+  try
+    LogError('Exceção não tratada: ' + E.ClassName + ': ' + E.Message);
+  except
+    { Se nem o log funcionar (ex.: disco cheio, sem permissão), não deixar
+      isso silenciar a mensagem de erro original para o usuário. }
+  end;
+
+  MessageDlg('ExSQL',
+    'Ocorreu um erro inesperado: "' + E.Message + '".' + LineEnding +
+    'Detalhes foram registrados em logs\error.log.',
+    mtError, [mbOk], 0, mbOk);
+end;
+
+initialization
+  AppExceptionHandler := TAppExceptionHandler.Create;
+
+finalization
+  AppExceptionHandler.Free;
 
 end.
 

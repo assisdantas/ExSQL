@@ -209,6 +209,7 @@ object frmMain: TfrmMain
           Width = 1087
           Align = alClient
           TabOrder = 1
+          OnChange = PageControl1Change
         end
       end
     end
@@ -217,6 +218,17 @@ object frmMain: TfrmMain
     MinFontSize = 0
     MaxFontSize = 0
     Left = 920
+    Top = 352
+  end
+  object OpenDialog1: TOpenDialog
+    Filter = 'Scripts SQL (*.sql)|*.sql|Todos os arquivos (*.*)|*.*'
+    Left = 848
+    Top = 352
+  end
+  object SaveDialog1: TSaveDialog
+    DefaultExt = '.sql'
+    Filter = 'Scripts SQL (*.sql)|*.sql|Todos os arquivos (*.*)|*.*'
+    Left = 776
     Top = 352
   end
   object ImageList1: TImageList
@@ -1185,6 +1197,7 @@ object frmMain: TfrmMain
       Caption = 'A&juda'
       object MenuItem15: TMenuItem
         Caption = '&Sobre'
+        OnClick = MenuItem15Click
       end
     end
   end
@@ -1205,10 +1218,12 @@ object frmMain: TfrmMain
     object actDeleteConn: TAction
       Caption = '&Deletar conexão'
       ImageIndex = 22
+      OnExecute = actDeleteConnExecute
     end
     object actCopyConn: TAction
       Caption = '&Copiar conexão'
       ImageIndex = 18
+      OnExecute = actCopyConnExecute
     end
     object actExecuteSQL: TAction
       Caption = '&Executar'
@@ -1230,42 +1245,52 @@ object frmMain: TfrmMain
     object actUndo: TAction
       Caption = '&Desfazer'
       ImageIndex = 15
+      OnExecute = actUndoExecute
     end
     object actRedo: TAction
       Caption = '&Refazer'
       ImageIndex = 14
+      OnExecute = actRedoExecute
     end
     object actPaste: TAction
       Caption = '&Colar'
       ImageIndex = 11
+      OnExecute = actPasteExecute
     end
     object actCopy: TAction
       Caption = 'Co&piar'
       ImageIndex = 12
+      OnExecute = actCopyExecute
     end
     object actCut: TAction
       Caption = 'Recor&tar'
       ImageIndex = 10
+      OnExecute = actCutExecute
     end
     object actNew: TAction
       Caption = '&Novo'
       ImageIndex = 6
+      OnExecute = actNewExecute
     end
     object actOpen: TAction
       Caption = '&Abrir'
       ImageIndex = 5
+      OnExecute = actOpenExecute
     end
     object actSave: TAction
       Caption = '&Salvar'
       ImageIndex = 4
+      OnExecute = actSaveExecute
     end
     object actSaveAs: TAction
       Caption = 'Salvar &como'
       ImageIndex = 3
+      OnExecute = actSaveAsExecute
     end
     object actClose: TAction
       Caption = '&Fechar'
       ImageIndex = 16
+      OnExecute = actCloseExecute
     end
     object actConnect: TAction
       Caption = '&Conectar'
